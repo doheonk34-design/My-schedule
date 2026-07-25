@@ -70,6 +70,14 @@
   }
   .card + .card{margin-top:16px;}
   .card h3{font-size:13px; letter-spacing:.04em; color:var(--sub); text-transform:uppercase; margin-bottom:14px; font-weight:600;}
+  .card-collapsible h3.card-toggle{
+    margin-bottom:0; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+    user-select:none;
+  }
+  .card-collapsible .chevron{font-size:11px; color:var(--sub); transition:transform .15s ease;}
+  .card-collapsible .card-body{margin-top:14px; overflow:hidden;}
+  .card-collapsible.collapsed .card-body{display:none;}
+  .card-collapsible.collapsed .chevron{transform:rotate(-90deg);}
   .card .subtext{font-size:12px;color:var(--sub);line-height:1.6;margin:-8px 0 14px;}
 
   label.field{display:block; font-size:12px; color:var(--sub); margin-bottom:6px; margin-top:12px;}
@@ -446,33 +454,41 @@
       </div>
 
       <div class="settings-scroll-area">
-        <div class="card">
-          <h3>근무 유형 설정</h3>
-          <p class="subtext">이름은 자유롭게 (주간/Day/D 등). 역할(주간·야간 등)만 맞게 지정하면 자동 계산에 활용됩니다.</p>
-          <div id="shiftTypeRows"></div>
-          <button class="btn block" id="addShiftType">+ 근무 유형 추가</button>
+        <div class="card card-collapsible collapsed">
+          <h3 class="card-toggle">근무 유형 설정<span class="chevron">▾</span></h3>
+          <div class="card-body">
+            <p class="subtext">이름은 자유롭게 (주간/Day/D 등). 역할(주간·야간 등)만 맞게 지정하면 자동 계산에 활용됩니다.</p>
+            <div id="shiftTypeRows"></div>
+            <button class="btn block" id="addShiftType">+ 근무 유형 추가</button>
+          </div>
         </div>
 
-        <div class="card">
-          <h3>조별 근무 패턴 설정</h3>
-          <p class="subtext">조 이름을 원하는 표현으로 바꾸고, 아래 아이콘을 눌러서 순서대로 근무를 쌓으세요. 각 조 카드의 ⭐로 나의 근무조를 지정할 수 있어요.</p>
-          <div id="teamsBuilder"></div>
-          <button class="btn block" id="addTeam">+ 조 추가</button>
+        <div class="card card-collapsible collapsed">
+          <h3 class="card-toggle">조별 근무 패턴 설정<span class="chevron">▾</span></h3>
+          <div class="card-body">
+            <p class="subtext">조 이름을 원하는 표현으로 바꾸고, 아래 아이콘을 눌러서 순서대로 근무를 쌓으세요. 각 조 카드의 ⭐로 나의 근무조를 지정할 수 있어요.</p>
+            <div id="teamsBuilder"></div>
+            <button class="btn block" id="addTeam">+ 조 추가</button>
+          </div>
         </div>
 
-        <div class="card">
-          <h3>알람 설정 (근무 시작 기준)</h3>
-          <p class="subtext">알림음은 프로토타입용 예시음이에요. 실제 앱에서는 폰에 저장된 벨소리/알람음 목록에서 고르게 됩니다.</p>
-          <div id="alarmList"></div>
-          <button class="btn block" id="testAlarm">🔔 지금 테스트</button>
+        <div class="card card-collapsible collapsed">
+          <h3 class="card-toggle">알람 설정 (근무 시작 기준)<span class="chevron">▾</span></h3>
+          <div class="card-body">
+            <p class="subtext">알림음은 프로토타입용 예시음이에요. 실제 앱에서는 폰에 저장된 벨소리/알람음 목록에서 고르게 됩니다.</p>
+            <div id="alarmList"></div>
+            <button class="btn block" id="testAlarm">🔔 지금 테스트</button>
+          </div>
         </div>
 
-        <div class="card">
-          <h3>💾 데이터 백업</h3>
-          <p class="subtext">휴대폰을 바꾸거나 초기화해도 이 파일 하나로 지금까지의 설정을 그대로 되살릴 수 있어요. 파일을 클라우드(구글드라이브 등)나 나에게 보내기로 보관해두세요.</p>
-          <button class="btn block" id="exportData">⬇️ 내보내기 (백업 파일 저장)</button>
-          <input type="file" id="importDataInput" accept=".json" style="display:none;">
-          <button class="btn block" id="importData">⬆️ 가져오기 (백업 파일 불러오기)</button>
+        <div class="card card-collapsible collapsed">
+          <h3 class="card-toggle">💾 데이터 백업<span class="chevron">▾</span></h3>
+          <div class="card-body">
+            <p class="subtext">휴대폰을 바꾸거나 초기화해도 이 파일 하나로 지금까지의 설정을 그대로 되살릴 수 있어요. 파일을 클라우드(구글드라이브 등)나 나에게 보내기로 보관해두세요.</p>
+            <button class="btn block" id="exportData">⬇️ 내보내기 (백업 파일 저장)</button>
+            <input type="file" id="importDataInput" accept=".json" style="display:none;">
+            <button class="btn block" id="importData">⬆️ 가져오기 (백업 파일 불러오기)</button>
+          </div>
         </div>
       </div>
 
@@ -485,13 +501,6 @@
 
   <!-- PHONE / CALENDAR (메인 화면) -->
   <div class="phone-frame">
-    <div class="section-label">🏠 홈 화면 위젯 미리보기</div>
-    <div class="widget-size-chips" id="widgetSizeChips">
-      <button class="ws-chip" data-size="4x1">4×1 카드만</button>
-      <button class="ws-chip" data-size="4x3">4×3 카드+2주</button>
-      <button class="ws-chip" data-size="4x4">4×4 카드+한달</button>
-    </div>
-
     <div class="now-card" id="nowCard">
       <div class="now-top-row">
         <div class="now-datetime">
@@ -507,14 +516,7 @@
       <div class="now-status-row" id="nowStatusRow">
         <span id="nowStatus"></span>
       </div>
-      <div class="widget-mini-grid" id="widgetMiniGrid" style="display:none;"></div>
     </div>
-
-    <div class="note" style="margin-top:0;margin-bottom:18px;">
-      실제 기기에서는 위 위젯을 <b>탭하면 앱이 열리고</b>, 아래처럼 전체 달력과 수정 기능을 쓸 수 있어요. 위젯 자체에는 드래그나 팝업 같은 복잡한 조작은 넣을 수 없습니다 (OS 제약).
-    </div>
-
-    <div class="section-label">📱 앱 화면 (위젯 탭 시 열림)</div>
 
     <div class="pin-zone" id="pinZone" style="display:none;">
       <div class="hint">📍 핀을 달력의 날짜로 <b style="color:var(--text)">드래그</b>하면<br>그 날이 <span id="myTeamLabelHint">1조</span>의 <b style="color:var(--text)">주간 첫날</b>로 지정되고<br>모든 조의 일정이 각자의 패턴대로 다시 채워집니다.</div>
@@ -542,10 +544,6 @@
     <div class="grid" id="calGrid"></div>
 
     <div class="legend" id="legend"></div>
-
-    <div class="note">
-      맨 위 카드는 <b>홈 화면 위젯 미리보기</b>입니다. 실제 앱에서는 안드로이드는 App Widget(Glance/RemoteViews), iOS는 WidgetKit으로 각각 네이티브 구현되어 홈 화면에 표시됩니다. 알람도 이 프로토타입에서는 브라우저 알림/소리로 시뮬레이션하며, 실제 앱은 자체 알람 엔진(정확한 백그라운드 스케줄링)으로 동작합니다.
-    </div>
   </div>
 </div>
 
@@ -1313,7 +1311,6 @@ function renderNowCard(){
   }
 
   renderNowScheduleSplit(now);
-  renderWidgetMiniGrid();
 }
 setInterval(renderNowCard, 15000); // 실시간 시계 갱신 (15초마다)
 
@@ -1397,60 +1394,6 @@ function buildMiniDayCellEl(date){
   return cell;
 }
 
-function renderWidgetMiniGrid(){
-  const box = document.getElementById('widgetMiniGrid');
-  const size = state.widgetSize;
-
-  if(size==='4x1'){
-    box.style.display='none';
-    box.innerHTML='';
-    return;
-  }
-
-  box.style.display='block';
-  box.innerHTML = `
-    <div class="mini-weekdays">
-      <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
-    </div>
-    <div class="mini-grid" id="widgetMiniInnerGrid"></div>
-  `;
-  const grid = document.getElementById('widgetMiniInnerGrid');
-  const now = new Date();
-
-  if(size==='4x3'){
-    // 이번 주 일요일부터 2주(14일), 요일 정렬 맞춤
-    const startOfWeek = addDays(now, -now.getDay());
-    for(let i=0;i<14;i++){
-      grid.appendChild(buildMiniDayCellEl(addDays(startOfWeek,i)));
-    }
-  } else if(size==='4x4'){
-    // 이번 달 전체
-    const y=now.getFullYear(), m=now.getMonth();
-    const first = new Date(y,m,1);
-    const startOffset = first.getDay();
-    const daysInMonth = new Date(y,m+1,0).getDate();
-    const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
-    for(let i=0;i<totalCells;i++){
-      const dayNum = i-startOffset+1;
-      if(dayNum<1||dayNum>daysInMonth){
-        const pad = document.createElement('div');
-        pad.className='mini-cell mini-pad';
-        grid.appendChild(pad);
-        continue;
-      }
-      grid.appendChild(buildMiniDayCellEl(new Date(y,m,dayNum)));
-    }
-  }
-}
-
-document.querySelectorAll('.ws-chip').forEach(chip=>{
-  chip.onclick = ()=>{
-    state.widgetSize = chip.dataset.size;
-    document.querySelectorAll('.ws-chip').forEach(c=>c.classList.toggle('active', c===chip));
-    renderWidgetMiniGrid();
-  };
-});
-document.querySelector(`.ws-chip[data-size="${state.widgetSize}"]`).classList.add('active');
 
 // ================= ALARM PANEL =================
 function renderAlarmList(){
@@ -1569,6 +1512,7 @@ function restoreSettings(snap){
 }
 function openSettingsModal(){
   settingsSnapshot = snapshotSettings();
+  document.querySelectorAll('.card-collapsible').forEach(c=>c.classList.add('collapsed'));
   settingsModal.classList.add('show');
 }
 function closeSettingsModalKeep(){
@@ -1584,6 +1528,9 @@ function closeSettingsModalCancel(){
 }
 
 document.getElementById('settingsBtn').onclick = openSettingsModal;
+document.querySelectorAll('.card-toggle').forEach(h=>{
+  h.onclick = ()=> h.closest('.card-collapsible').classList.toggle('collapsed');
+});
 document.getElementById('settingsSaveBtn').onclick = closeSettingsModalKeep;
 document.getElementById('settingsCancelBtn').onclick = closeSettingsModalCancel;
 document.getElementById('settingsModalClose').onclick = closeSettingsModalCancel;
@@ -1988,7 +1935,6 @@ document.getElementById('importDataInput').addEventListener('change', async (e)=
     ensureTimeDefaults();
     renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
     renderCalendar(); renderNowCard(); updateMyTeamHint();
-    document.querySelectorAll('.ws-chip').forEach(c=>c.classList.toggle('active', c.dataset.size===state.widgetSize));
     showToastMsg('백업 파일을 불러왔습니다');
   }catch(err){
     showToastMsg('파일을 읽는 중 오류가 발생했습니다');
@@ -2061,7 +2007,47 @@ document.getElementById('todayBtn').onclick=()=>{
   renderCalendar();
 };
 
+// ================= 로컬 저장 (자동 저장/복원) =================
+const STORAGE_KEY = 'shiftNoteState_v1';
+
+function saveState(){
+  try{
+    const snapshot = {
+      shiftTypes: state.shiftTypes,
+      teams: state.teams,
+      myTeamId: state.myTeamId,
+      referenceDate: isoDate(state.referenceDate),
+      shiftTimes: state.shiftTimes,
+      alarms: state.alarms,
+      overrides: state.overrides,
+      notes: state.notes,
+      widgetSize: state.widgetSize
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  }catch(e){ /* 저장 불가(사파리 프라이빗 모드 등) 시 조용히 무시 */ }
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!data || !Array.isArray(data.shiftTypes) || !Array.isArray(data.teams)) return false;
+    state.shiftTypes = data.shiftTypes;
+    state.teams = data.teams;
+    state.myTeamId = data.myTeamId || (state.teams[0] && state.teams[0].id);
+    state.referenceDate = data.referenceDate ? startOfDay(new Date(data.referenceDate)) : state.referenceDate;
+    state.shiftTimes = data.shiftTimes || {};
+    state.alarms = data.alarms || {};
+    state.overrides = data.overrides || {};
+    state.notes = data.notes || {};
+    state.widgetSize = data.widgetSize || '4x1';
+    return true;
+  }catch(e){ return false; }
+}
+
 // ================= INIT =================
+loadState();
 ensureTimeDefaults();
 renderShiftTypeRows();
 renderTeamsBuilder();
@@ -2071,6 +2057,10 @@ renderLegend();
 renderCalendar();
 renderNowCard();
 updateMyTeamHint();
+
+setInterval(saveState, 4000); // 4초마다 자동 저장
+window.addEventListener('beforeunload', saveState);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveState(); });
 
 // ================= PWA: SERVICE WORKER 등록 =================
 if('serviceWorker' in navigator){
