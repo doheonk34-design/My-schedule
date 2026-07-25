@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shift-note-cache-v1';
+const CACHE_NAME = 'shift-note-cache-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -26,12 +26,13 @@ self.addEventListener('activate', (event) => {
 });
 
 // Network-first for the HTML (so updates show up quickly when online),
-// falling back to cache when offline. Cache-first for everything else.
+// falling back to cache when offline. cache:'no-store' bypasses the browser's
+// own HTTP cache too, not just the service worker's Cache Storage.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.mode === 'navigate' || (req.method === 'GET' && req.headers.get('accept')?.includes('text/html'))) {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
           const resClone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
