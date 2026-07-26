@@ -280,13 +280,12 @@
   .day-cell .holiday-name{font-size:7px; color:#FF5D5D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:4px; overflow:hidden;}
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
-  .day-cell .oppo{font-size:8px; color:var(--sub); font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
-  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:wrap; padding-top:4px;}
+  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:4px;}
   .day-cell .note-chip{
     font-size:8px; color:var(--sub); margin-top:3px; background:var(--panel);
     border-radius:4px; padding:1px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .day-cell .dots i{width:6px;height:6px;border-radius:50%;display:block;}
+  .day-cell .dots i{width:5px;height:5px;border-radius:50%;display:block; flex-shrink:0;}
   .day-cell.flash{animation:flashcell .5s ease;}
   .day-cell.hover-target{
     transform:scale(1.12);
@@ -339,11 +338,11 @@
   }
   .mini-cell .mini-dots{display:flex; gap:2.5px; margin-top:auto;}
   .mini-cell .mini-dots i{width:5.5px; height:5.5px; border-radius:50%; flex-shrink:0; display:block;}
-  .now-top-row{display:flex; align-items:flex-start; gap:18px;}
-  .now-datetime{flex-shrink:0;}
-  .now-date{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--sub);}
+  .now-top-row{display:flex; align-items:flex-start; gap:14px;}
+  .now-datetime{flex-shrink:0; max-width:92px;}
+  .now-date{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--sub); line-height:1.3;}
   .now-time{
-    font-family:'JetBrains Mono',monospace; font-weight:600; font-size:42px; line-height:1.1;
+    font-family:'JetBrains Mono',monospace; font-weight:600; font-size:28px; line-height:1.1;
     margin-top:4px; letter-spacing:.01em;
   }
   .now-status-row{
@@ -357,15 +356,15 @@
     display:grid; grid-template-columns:1fr auto 1fr; gap:14px;
   }
   .now-schedule-divider{width:1px; background:var(--border);}
-  .now-schedule-col{display:flex; flex-direction:column; gap:5px; min-width:0;}
+  .now-schedule-col{display:flex; flex-direction:column; gap:6px; min-width:0;}
   .now-schedule-col .sched-title{
     font-size:9px; color:var(--sub); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px;
   }
   .now-schedule-item{
-    font-size:11px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .now-schedule-item b{
-    color:var(--standby); font-family:'JetBrains Mono',monospace; margin-right:4px; font-weight:600; font-size:10px;
+    color:var(--standby); font-family:'JetBrains Mono',monospace; margin-right:4px; font-weight:600; font-size:11px;
   }
   .now-schedule-empty{font-size:10px; color:var(--sub);}
 
@@ -400,7 +399,7 @@
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
     background:#1E2430; border:1px solid var(--border); color:var(--text);
     padding:10px 18px; border-radius:999px; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.4);
-    opacity:0; pointer-events:none; transition:opacity .25s ease, bottom .25s ease; z-index:1000;
+    opacity:0; pointer-events:none; transition:opacity .25s ease, bottom .25s ease; z-index:2000;
   }
   .toast.show{opacity:1; bottom:34px;}
 
@@ -576,7 +575,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div class="modal-overlay" id="confirmModal">
+<div class="modal-overlay" id="confirmModal" style="z-index:5000;">
   <div class="modal-box" style="max-width:320px;">
     <div class="modal-header"><span>⚠️ 확인</span></div>
     <p id="confirmMessage" style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-line;"></p>
@@ -627,6 +626,16 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="notesViewModal">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-header">
+      <span id="notesViewDate">7월 21일</span>
+      <button id="notesViewClose">✕</button>
+    </div>
+    <div id="notesViewList"></div>
   </div>
 </div>
 
@@ -1243,10 +1252,6 @@ function buildDayCellEl(date, interactive){
 
   const dots = state.teams.map(t=>shiftForTeamOnDate(date,t.id));
 
-  let oppoHtml = '';
-  const oppo = findOppositeShift(date, mine.role);
-  if(oppo) oppoHtml = `<span class="oppo">${oppo.label}: ${oppo.teamName}</span>`;
-
   let noteHtml = '';
   const notes = getNotesForDate(date);
   if(notes.length){
@@ -1265,13 +1270,15 @@ function buildDayCellEl(date, interactive){
     ${numHtml}
     <div class="mylabel-row">
       <span class="mylabel" style="color:${mine.color}">${mine.label}</span>
-      ${oppoHtml}
     </div>
     ${noteHtml}
     <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${d.label}"></i>`).join('')}</div>
   `;
   if(interactive){
-    cell.onclick = ()=>{ if(state.editMode) openEditModal(date); };
+    cell.onclick = ()=>{
+      if(state.editMode) openEditModal(date);
+      else if(getNotesForDate(date).length>0) openNotesViewModal(date);
+    };
   } else {
     cell.style.cursor='default';
   }
@@ -1366,7 +1373,7 @@ function renderNowCard(){
 setInterval(renderNowCard, 15000); // 실시간 시계 갱신 (15초마다)
 
 function renderNowScheduleSplit(now){
-  const MAX_ITEMS = 4;
+  const MAX_ITEMS = 5;
 
   const todayEl = document.getElementById('nowScheduleToday');
   const todayNotes = getNotesForDate(now);
@@ -1808,6 +1815,26 @@ document.getElementById('editModeBtn').onclick = ()=>{
 
 let modalOverrideSnapshot; // 모달 열기 전 '나의 근무조' 해당 날짜 override 값 (취소 시 복원용)
 
+// ================= 일정/메모 읽기전용 팝업 (수정모드가 아닐 때 메모 있는 칸 탭하면 뜸) =================
+const notesViewModal = document.getElementById('notesViewModal');
+function openNotesViewModal(date){
+  document.getElementById('notesViewDate').textContent = (date.getMonth()+1)+'월 '+date.getDate()+'일 ('+weekdayNames[date.getDay()]+')';
+  const listEl = document.getElementById('notesViewList');
+  listEl.innerHTML='';
+  getNotesForDate(date).forEach(n=>{
+    const row = document.createElement('div');
+    row.className='modal-note-row';
+    row.innerHTML = `
+      ${n.time ? `<span class="mn-time">${n.time}</span>` : ''}
+      <span class="mn-text">${escapeHtml(n.text)}</span>
+    `;
+    listEl.appendChild(row);
+  });
+  notesViewModal.classList.add('show');
+}
+document.getElementById('notesViewClose').onclick = ()=> notesViewModal.classList.remove('show');
+notesViewModal.addEventListener('click', (e)=>{ if(e.target===notesViewModal) notesViewModal.classList.remove('show'); });
+
 function openEditModal(date){
   modalDate = date;
   document.getElementById('modalDate').textContent = (date.getMonth()+1)+'월 '+date.getDate()+'일 ('+['일','월','화','수','목','금','토'][date.getDay()]+')';
@@ -1936,6 +1963,7 @@ const confirmModal = document.getElementById('confirmModal');
 let confirmResolver = null;
 function showConfirm(message){
   return new Promise(resolve=>{
+    document.body.appendChild(confirmModal); // 항상 문서 맨 끝으로 옮겨서 다른 팝업 위에 확실히 뜨게 함
     document.getElementById('confirmMessage').textContent = message;
     confirmResolver = resolve;
     confirmModal.classList.add('show');
@@ -2242,6 +2270,7 @@ pin.addEventListener('pointerdown', pointerDown);
 let toastTimer;
 function showToastMsg(msg){
   const t = document.getElementById('toast');
+  document.body.appendChild(t); // 항상 문서 맨 끝으로 옮겨서 어떤 팝업 위에서도 보이게 함
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
