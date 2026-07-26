@@ -255,7 +255,7 @@
   .weekdays div:first-child{color:#FF7C7C;}
   .weekdays div:last-child{color:#7CA8FF;}
 
-  .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; touch-action:pan-y;}
   .day-cell{
     height:92px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
     padding:5px; cursor:pointer; position:relative; overflow:hidden;
@@ -272,7 +272,7 @@
   .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:4px; overflow:hidden;}
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
   .day-cell .oppo{font-size:8px; color:var(--sub); font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
-  .day-cell .dots{display:flex; gap:1px; margin-top:auto; flex-wrap:wrap; padding-top:4px;}
+  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:wrap; padding-top:4px;}
   .day-cell .note-chip{
     font-size:8px; color:var(--sub); margin-top:3px; background:var(--panel);
     border-radius:4px; padding:1px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -2002,6 +2002,32 @@ document.getElementById('todayBtn').onclick=()=>{
   const n=new Date(); state.viewYear=n.getFullYear(); state.viewMonth=n.getMonth();
   renderCalendar();
 };
+
+// 달력을 좌우로 스와이프하면 이전달/다음달로 이동
+(function setupCalendarSwipe(){
+  const grid = document.getElementById('calGrid');
+  let startX=0, startY=0, tracking=false, suppressClick=false;
+
+  grid.addEventListener('pointerdown', (e)=>{
+    startX = e.clientX; startY = e.clientY; tracking = true;
+  });
+  grid.addEventListener('pointerup', (e)=>{
+    if(!tracking) return;
+    tracking = false;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5){
+      suppressClick = true;
+      if(dx < 0) document.getElementById('nextMonth').click();
+      else document.getElementById('prevMonth').click();
+      setTimeout(()=>{ suppressClick = false; }, 60);
+    }
+  });
+  grid.addEventListener('pointercancel', ()=>{ tracking = false; });
+  // 스와이프 직후 발생하는 클릭이 날짜 칸의 수정 팝업을 열지 않도록 차단
+  grid.addEventListener('click', (e)=>{
+    if(suppressClick){ e.stopPropagation(); e.preventDefault(); }
+  }, true);
+})();
 
 // ================= 로컬 저장 (자동 저장/복원) =================
 const STORAGE_KEY = 'shiftNoteState_v1';
