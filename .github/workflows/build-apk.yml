@@ -1,0 +1,58 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm dependencies
+        run: npm install
+
+      # 저장소 최상위의 index.html / manifest.json / sw.js / 아이콘들이
+      # "진짜" 원본입니다 (GitHub Pages가 서빙하는 파일과 동일).
+      # 여기서 그걸 그대로 www/ 안으로 복사해서 APK에도 항상 최신 내용이 들어가게 합니다.
+      # → 이제 index.html은 저장소 최상위 것 하나만 관리하면 됩니다.
+      - name: Copy latest web files into www/
+        run: |
+          cp index.html www/index.html
+          cp manifest.json www/manifest.json || true
+          cp sw.js www/sw.js || true
+          cp icon-*.png www/ || true
+          cp apple-touch-icon.png www/ || true
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-note-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
