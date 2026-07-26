@@ -87,7 +87,15 @@
   .card-collapsible .card-body{margin-top:14px; overflow:hidden;}
   .card-collapsible.collapsed .card-body{display:none;}
   .card-collapsible.collapsed .chevron{transform:rotate(-90deg);}
-  .card .subtext{font-size:12px;color:var(--sub);line-height:1.6;margin:-8px 0 14px;}
+  .card .subtext{font-size:12px;color:var(--sub);line-height:1.6;margin:-8px 0 14px; overflow-wrap:anywhere; word-break:break-word;}
+  .sync-code-box{
+    display:block; margin:8px 0; padding:8px 10px; background:var(--panel-alt); border:1px solid var(--border);
+    border-radius:8px; font-size:13px; color:var(--sub);
+  }
+  .sync-code-box b{
+    color:var(--text); font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700;
+    letter-spacing:.06em; margin-left:4px;
+  }
 
   label.field{display:block; font-size:12px; color:var(--sub); margin-bottom:6px; margin-top:12px;}
   label.field:first-child{margin-top:0;}
@@ -2072,12 +2080,22 @@ function renderSyncStatus(){
     return;
   }
   if(syncCode){
-    statusEl.innerHTML = `🟢 연동됨 — 코드: <b style="color:var(--text);font-family:'JetBrains Mono',monospace;">${syncCode}</b><br>다른 기기에서도 이 코드를 입력하면 실시간으로 같이 반영돼요.`;
+    statusEl.innerHTML = `🟢 연동됨<div class="sync-code-box">코드: <b>${syncCode}</b></div>다른 기기에서도 이 코드를 입력하면 실시간으로 같이 반영돼요.`;
     stopBtn.style.display = 'block';
   } else {
     statusEl.textContent = '아이폰과 안드로이드에서 같은 코드를 입력하면 실시간으로 데이터가 서로 반영돼요.';
     stopBtn.style.display = 'none';
   }
+}
+
+let lastSyncedPayloadJSON = null; // 마지막으로 주고받은 데이터 - 같으면 재전송/재렌더 안 함 (에코 방지 + 배터리 절약)
+
+function buildSyncPayload(){
+  return {
+    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
+    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
+    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
+  };
 }
 
 function applyRemoteState(data){
@@ -2108,9 +2126,13 @@ function startSync(code, opts){
   localStorage.setItem('shiftNoteSyncCode', syncCode);
   if(syncUnsub) syncUnsub();
   syncUnsub = syncDb.collection('shiftNoteSync').doc(syncCode).onSnapshot((doc)=>{
-    if(doc.metadata.hasPendingWrites) return; // 내가 방금 쓴 변경은 무시 (로컬 에코 방지)
+    if(doc.metadata.hasPendingWrites) return; // 내가 방금 쓴, 아직 서버 확인 전인 변경은 무시
     const data = doc.data();
-    if(data && data.payload) applyRemoteState(data.payload);
+    if(!data || !data.payload) return;
+    const incomingJSON = JSON.stringify(data.payload);
+    if(incomingJSON === lastSyncedPayloadJSON) return; // 내가 보낸 게 그대로 돌아온 것(에코) - 할 일 없음
+    lastSyncedPayloadJSON = incomingJSON;
+    applyRemoteState(data.payload);
   }, ()=>{ showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요'); });
   renderSyncStatus();
   // 새로 코드를 "생성"하는 경우에만 지금 내 데이터를 먼저 올림.
@@ -2121,11 +2143,10 @@ function startSync(code, opts){
 
 function pushStateToCloud(){
   if(!syncDb || !syncCode) return;
-  const payload = {
-    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
-    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
-  };
+  const payload = buildSyncPayload();
+  const payloadJSON = JSON.stringify(payload);
+  if(payloadJSON === lastSyncedPayloadJSON) return; // 마지막과 똑같으면 전송 생략 (불필요한 통신/배터리 소모 방지)
+  lastSyncedPayloadJSON = payloadJSON;
   syncDb.collection('shiftNoteSync').doc(syncCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(()=>{ /* 오프라인이면 조용히 실패, 로컬 저장은 그대로 유지됨 */ });
@@ -2179,13 +2200,13 @@ function renderShareStatus(){
   }
 }
 
+let lastSharedPayloadJSON = null;
 function pushStateToShare(){
   if(!shareCode || !ensureFirebaseInit()) return;
-  const payload = {
-    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
-    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
-  };
+  const payload = buildSyncPayload();
+  const payloadJSON = JSON.stringify(payload);
+  if(payloadJSON === lastSharedPayloadJSON) return; // 변경 없으면 전송 생략
+  lastSharedPayloadJSON = payloadJSON;
   syncDb.collection('shiftNoteShare').doc(shareCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(()=>{});
