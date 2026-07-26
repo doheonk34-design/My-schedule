@@ -1,0 +1,8 @@
+{
+	"appId": "com.shiftnote.app",
+	"appName": "교대노트",
+	"webDir": "www",
+	"server": {
+		"androidScheme": "https"
+	}
+}

@@ -415,12 +415,6 @@
   }
   .modal-box .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .modal-box .modal-header span{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px;}
-  .share-tabs{display:flex; gap:6px; margin-bottom:16px; background:var(--panel-alt); border-radius:10px; padding:4px;}
-  .share-tab{
-    flex:1; padding:8px 6px; border-radius:8px; border:none; background:none; color:var(--sub);
-    font-size:12px; font-weight:600; cursor:pointer;
-  }
-  .share-tab.active{background:var(--panel); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.3);}
   .settings-modal-box{
     max-width:420px; display:flex; flex-direction:column; max-height:85vh; overflow:visible;
   }
@@ -509,6 +503,25 @@
         </div>
 
         <div class="card card-collapsible collapsed">
+          <h3 class="card-toggle">📤 읽기전용 공유<span class="chevron">▾</span></h3>
+          <div class="card-body">
+            <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
+            <button class="btn primary block" id="shareCreateBtn">🔗 공유 링크 만들기</button>
+            <div id="shareLinkBox" style="display:none;">
+              <label class="field">공유 링크</label>
+              <div class="row">
+                <input type="text" id="shareLinkInput" readonly>
+                <button class="btn" id="shareCopyBtn">복사</button>
+              </div>
+              <div class="row" style="margin-top:10px;">
+                <button class="btn" id="shareRegenBtn">🔄 새로 만들기</button>
+                <button class="btn" id="shareOffBtn">공유 끄기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">💾 데이터 백업<span class="chevron">▾</span></h3>
           <div class="card-body">
             <p class="subtext">휴대폰을 바꾸거나 초기화해도 이 파일 하나로 지금까지의 설정을 그대로 되살릴 수 있어요. 파일을 클라우드(구글드라이브 등)나 나에게 보내기로 보관해두세요.</p>
@@ -590,41 +603,17 @@
 <div class="modal-overlay" id="shareModal">
   <div class="modal-box">
     <div class="modal-header">
-      <span>📤 공유하기</span>
+      <span>📤 달력 공유</span>
       <button id="shareModalClose">✕</button>
     </div>
-
-    <div class="share-tabs">
-      <button class="share-tab active" id="shareTabPhotoBtn">🖼️ 사진으로 공유</button>
-      <button class="share-tab" id="shareTabLinkBtn">🔗 링크로 공유</button>
-    </div>
-
-    <div class="share-tab-panel" id="shareTabPhoto">
-      <label class="field">공유할 달</label>
-      <select id="shareMonthSelect"></select>
-      <button class="btn primary block" id="generateShareImage">이미지 생성</button>
-      <div id="sharePreviewWrap" style="display:none;margin-top:14px;">
-        <canvas id="shareCanvas" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;"></canvas>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="shareDownloadBtn">⬇️ 다운로드</button>
-          <button class="btn primary" id="shareNativeBtn">📤 공유하기</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="share-tab-panel" id="shareTabLink" style="display:none;">
-      <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
-      <button class="btn primary block" id="shareCreateBtn">🔗 공유 링크 만들기</button>
-      <div id="shareLinkBox" style="display:none;">
-        <label class="field">공유 링크</label>
-        <div class="row">
-          <input type="text" id="shareLinkInput" readonly>
-          <button class="btn" id="shareCopyBtn">복사</button>
-        </div>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="shareRegenBtn">🔄 새로 만들기</button>
-          <button class="btn" id="shareOffBtn">공유 끄기</button>
-        </div>
+    <label class="field">공유할 달</label>
+    <select id="shareMonthSelect"></select>
+    <button class="btn primary block" id="generateShareImage">이미지 생성</button>
+    <div id="sharePreviewWrap" style="display:none;margin-top:14px;">
+      <canvas id="shareCanvas" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;"></canvas>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn" id="shareDownloadBtn">⬇️ 다운로드</button>
+        <button class="btn primary" id="shareNativeBtn">📤 공유하기</button>
       </div>
     </div>
   </div>
@@ -1735,26 +1724,10 @@ function drawMonthToCanvas(year, month){
 document.getElementById('shareBtn').onclick = ()=>{
   populateShareMonthSelect();
   document.getElementById('sharePreviewWrap').style.display='none';
-  switchShareTab('photo');
-  renderShareStatus();
   shareModal.classList.add('show');
 };
 document.getElementById('shareModalClose').onclick = ()=> shareModal.classList.remove('show');
 shareModal.addEventListener('click', (e)=>{ if(e.target===shareModal) shareModal.classList.remove('show'); });
-
-function switchShareTab(tab){
-  const photoBtn = document.getElementById('shareTabPhotoBtn');
-  const linkBtn = document.getElementById('shareTabLinkBtn');
-  const photoPanel = document.getElementById('shareTabPhoto');
-  const linkPanel = document.getElementById('shareTabLink');
-  const isPhoto = tab==='photo';
-  photoBtn.classList.toggle('active', isPhoto);
-  linkBtn.classList.toggle('active', !isPhoto);
-  photoPanel.style.display = isPhoto ? 'block' : 'none';
-  linkPanel.style.display = isPhoto ? 'none' : 'block';
-}
-document.getElementById('shareTabPhotoBtn').onclick = ()=> switchShareTab('photo');
-document.getElementById('shareTabLinkBtn').onclick = ()=> switchShareTab('link');
 
 document.getElementById('generateShareImage').onclick = async ()=>{
   const [y,m] = document.getElementById('shareMonthSelect').value.split('-').map(Number);

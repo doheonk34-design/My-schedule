@@ -16,10 +16,6 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-
-<!-- 기기 간 동기화용 (설정 방법은 README/안내 참고) -->
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#0E1116;
@@ -65,11 +61,6 @@
 
   .app-toolbar{display:flex; gap:8px; margin-bottom:14px;}
   .app-toolbar .btn{flex:1;}
-  .view-only-banner{
-    background:#2E7D6B22; border:1px solid #37D6B055; color:var(--standby);
-    font-size:12px; font-weight:600; text-align:center; padding:10px 12px;
-    border-radius:10px; margin-bottom:14px;
-  }
 
   .card{
     background:var(--panel);
@@ -264,7 +255,7 @@
   .weekdays div:first-child{color:#FF7C7C;}
   .weekdays div:last-child{color:#7CA8FF;}
 
-  .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; touch-action:pan-y;}
+  .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
   .day-cell{
     height:92px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
     padding:5px; cursor:pointer; position:relative; overflow:hidden;
@@ -281,7 +272,7 @@
   .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:4px; overflow:hidden;}
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
   .day-cell .oppo{font-size:8px; color:var(--sub); font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
-  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:wrap; padding-top:4px;}
+  .day-cell .dots{display:flex; gap:3px; margin-top:auto; flex-wrap:wrap; padding-top:4px;}
   .day-cell .note-chip{
     font-size:8px; color:var(--sub); margin-top:3px; background:var(--panel);
     border-radius:4px; padding:1px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -415,12 +406,6 @@
   }
   .modal-box .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .modal-box .modal-header span{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px;}
-  .share-tabs{display:flex; gap:6px; margin-bottom:16px; background:var(--panel-alt); border-radius:10px; padding:4px;}
-  .share-tab{
-    flex:1; padding:8px 6px; border-radius:8px; border:none; background:none; color:var(--sub);
-    font-size:12px; font-weight:600; cursor:pointer;
-  }
-  .share-tab.active{background:var(--panel); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.3);}
   .settings-modal-box{
     max-width:420px; display:flex; flex-direction:column; max-height:85vh; overflow:visible;
   }
@@ -453,11 +438,13 @@
 </head>
 <body>
 
-
+<div class="topbar">
+  <div class="eyebrow"><span class="led"></span>SHIFT SCHEDULE PROTOTYPE</div>
+  <h1>교대노트</h1>
+  <p>근무 유형과 조 이름을 우리 회사 표현 그대로 만들고, 아이콘을 눌러 근무표를 쌓아보세요. 핀을 원하는 날짜로 드래그하면 그 날을 기준으로 전체 조의 일정이 자동으로 채워집니다.</p>
+</div>
 
 <div class="app-shell">
-  <div class="view-only-banner" id="viewOnlyBanner" style="display:none;">👀 읽기전용 공유 화면 — 실시간으로 업데이트되며, 수정은 할 수 없어요</div>
-
   <!-- SETTINGS (모달로 열림) -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-box settings-modal-box">
@@ -491,20 +478,6 @@
             <p class="subtext">알림음은 프로토타입용 예시음이에요. 실제 앱에서는 폰에 저장된 벨소리/알람음 목록에서 고르게 됩니다.</p>
             <div id="alarmList"></div>
             <button class="btn block" id="testAlarm">🔔 지금 테스트</button>
-          </div>
-        </div>
-
-        <div class="card card-collapsible collapsed">
-          <h3 class="card-toggle">🔄 기기 간 동기화<span class="chevron">▾</span></h3>
-          <div class="card-body">
-            <p class="subtext" id="syncStatusText">아이폰과 안드로이드에서 같은 코드를 입력하면 실시간으로 데이터가 서로 반영돼요.</p>
-            <button class="btn primary block" id="syncStartBtn">✨ 새 동기화 시작 (코드 생성)</button>
-            <label class="field">다른 기기에서 만든 코드 입력</label>
-            <div class="row">
-              <input type="text" id="syncCodeInput" placeholder="예: A3F9K2XQ" style="text-transform:uppercase;">
-              <button class="btn" id="syncJoinBtn">연결</button>
-            </div>
-            <button class="btn block" id="syncStopBtn" style="display:none;">동기화 끄기</button>
           </div>
         </div>
 
@@ -590,41 +563,17 @@
 <div class="modal-overlay" id="shareModal">
   <div class="modal-box">
     <div class="modal-header">
-      <span>📤 공유하기</span>
+      <span>📤 달력 공유</span>
       <button id="shareModalClose">✕</button>
     </div>
-
-    <div class="share-tabs">
-      <button class="share-tab active" id="shareTabPhotoBtn">🖼️ 사진으로 공유</button>
-      <button class="share-tab" id="shareTabLinkBtn">🔗 링크로 공유</button>
-    </div>
-
-    <div class="share-tab-panel" id="shareTabPhoto">
-      <label class="field">공유할 달</label>
-      <select id="shareMonthSelect"></select>
-      <button class="btn primary block" id="generateShareImage">이미지 생성</button>
-      <div id="sharePreviewWrap" style="display:none;margin-top:14px;">
-        <canvas id="shareCanvas" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;"></canvas>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="shareDownloadBtn">⬇️ 다운로드</button>
-          <button class="btn primary" id="shareNativeBtn">📤 공유하기</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="share-tab-panel" id="shareTabLink" style="display:none;">
-      <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
-      <button class="btn primary block" id="shareCreateBtn">🔗 공유 링크 만들기</button>
-      <div id="shareLinkBox" style="display:none;">
-        <label class="field">공유 링크</label>
-        <div class="row">
-          <input type="text" id="shareLinkInput" readonly>
-          <button class="btn" id="shareCopyBtn">복사</button>
-        </div>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="shareRegenBtn">🔄 새로 만들기</button>
-          <button class="btn" id="shareOffBtn">공유 끄기</button>
-        </div>
+    <label class="field">공유할 달</label>
+    <select id="shareMonthSelect"></select>
+    <button class="btn primary block" id="generateShareImage">이미지 생성</button>
+    <div id="sharePreviewWrap" style="display:none;margin-top:14px;">
+      <canvas id="shareCanvas" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;"></canvas>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn" id="shareDownloadBtn">⬇️ 다운로드</button>
+        <button class="btn primary" id="shareNativeBtn">📤 공유하기</button>
       </div>
     </div>
   </div>
@@ -1735,26 +1684,10 @@ function drawMonthToCanvas(year, month){
 document.getElementById('shareBtn').onclick = ()=>{
   populateShareMonthSelect();
   document.getElementById('sharePreviewWrap').style.display='none';
-  switchShareTab('photo');
-  renderShareStatus();
   shareModal.classList.add('show');
 };
 document.getElementById('shareModalClose').onclick = ()=> shareModal.classList.remove('show');
 shareModal.addEventListener('click', (e)=>{ if(e.target===shareModal) shareModal.classList.remove('show'); });
-
-function switchShareTab(tab){
-  const photoBtn = document.getElementById('shareTabPhotoBtn');
-  const linkBtn = document.getElementById('shareTabLinkBtn');
-  const photoPanel = document.getElementById('shareTabPhoto');
-  const linkPanel = document.getElementById('shareTabLink');
-  const isPhoto = tab==='photo';
-  photoBtn.classList.toggle('active', isPhoto);
-  linkBtn.classList.toggle('active', !isPhoto);
-  photoPanel.style.display = isPhoto ? 'block' : 'none';
-  linkPanel.style.display = isPhoto ? 'none' : 'block';
-}
-document.getElementById('shareTabPhotoBtn').onclick = ()=> switchShareTab('photo');
-document.getElementById('shareTabLinkBtn').onclick = ()=> switchShareTab('link');
 
 document.getElementById('generateShareImage').onclick = async ()=>{
   const [y,m] = document.getElementById('shareMonthSelect').value.split('-').map(Number);
@@ -2008,194 +1941,6 @@ document.getElementById('importDataInput').addEventListener('change', async (e)=
   }
 });
 
-// ================= 기기 간 실시간 동기화 (Firebase Firestore) =================
-// 아래 firebaseConfig 값을 본인의 Firebase 프로젝트 설정으로 바꿔야 동작합니다.
-// (Firebase 콘솔 → 프로젝트 설정 → 내 앱 → SDK 설정 및 구성 에서 복사)
-const firebaseConfig = {
-  apiKey: "AIzaSyCljsQro5Oqk7AqqgtCaFJUgTrGQviuwp0",
-  authDomain: "shift-schedule-01.firebaseapp.com",
-  projectId: "shift-schedule-01",
-  storageBucket: "shift-schedule-01.firebasestorage.app",
-  messagingSenderId: "781370742400",
-  appId: "1:781370742400:web:093c9af3cc0ed95adaf865"
-};
-
-let syncDb = null;
-let syncUnsub = null;
-let syncCode = localStorage.getItem('shiftNoteSyncCode') || null;
-
-function isFirebaseConfigured(){
-  return typeof firebase !== 'undefined' && firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY';
-}
-
-function ensureFirebaseInit(){
-  if(!isFirebaseConfigured()) return false;
-  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-  syncDb = firebase.firestore();
-  return true;
-}
-
-function renderSyncStatus(){
-  const statusEl = document.getElementById('syncStatusText');
-  const stopBtn = document.getElementById('syncStopBtn');
-  if(!isFirebaseConfigured()){
-    statusEl.textContent = '동기화 기능이 아직 설정되지 않았어요. (개발자 안내 참고)';
-    stopBtn.style.display = 'none';
-    return;
-  }
-  if(syncCode){
-    statusEl.innerHTML = `🟢 연동됨 — 코드: <b style="color:var(--text);font-family:'JetBrains Mono',monospace;">${syncCode}</b><br>다른 기기에서도 이 코드를 입력하면 실시간으로 같이 반영돼요.`;
-    stopBtn.style.display = 'block';
-  } else {
-    statusEl.textContent = '아이폰과 안드로이드에서 같은 코드를 입력하면 실시간으로 데이터가 서로 반영돼요.';
-    stopBtn.style.display = 'none';
-  }
-}
-
-function applyRemoteState(data){
-  if(!data) return;
-  state.shiftTypes = data.shiftTypes || state.shiftTypes;
-  state.teams = data.teams || state.teams;
-  state.myTeamId = data.myTeamId || state.myTeamId;
-  state.referenceDate = data.referenceDate ? startOfDay(new Date(data.referenceDate)) : state.referenceDate;
-  state.shiftTimes = data.shiftTimes || {};
-  state.alarms = data.alarms || {};
-  state.overrides = data.overrides || {};
-  state.notes = data.notes || {};
-  state.widgetSize = data.widgetSize || state.widgetSize;
-  ensureTimeDefaults();
-  renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
-  renderCalendar(); renderNowCard(); updateMyTeamHint();
-  saveState();
-  showToastMsg('다른 기기의 변경사항을 받아왔어요 🔄');
-}
-
-function startSync(code, opts){
-  opts = opts || {};
-  if(!ensureFirebaseInit()){
-    showToastMsg('동기화 기능이 아직 설정되지 않았어요');
-    return;
-  }
-  syncCode = code.trim().toUpperCase();
-  localStorage.setItem('shiftNoteSyncCode', syncCode);
-  if(syncUnsub) syncUnsub();
-  syncUnsub = syncDb.collection('shiftNoteSync').doc(syncCode).onSnapshot((doc)=>{
-    if(doc.metadata.hasPendingWrites) return; // 내가 방금 쓴 변경은 무시 (로컬 에코 방지)
-    const data = doc.data();
-    if(data && data.payload) applyRemoteState(data.payload);
-  }, ()=>{ showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요'); });
-  renderSyncStatus();
-  // 새로 코드를 "생성"하는 경우에만 지금 내 데이터를 먼저 올림.
-  // 기존 코드에 "참여"/재연결하는 경우는 클라우드에 있는 데이터를 받아오는 게 먼저라 여기서 덮어쓰지 않음.
-  if(opts.pushInitial) pushStateToCloud();
-  showToastMsg('동기화를 시작했어요');
-}
-
-function pushStateToCloud(){
-  if(!syncDb || !syncCode) return;
-  const payload = {
-    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
-    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
-  };
-  syncDb.collection('shiftNoteSync').doc(syncCode).set({
-    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(()=>{ /* 오프라인이면 조용히 실패, 로컬 저장은 그대로 유지됨 */ });
-}
-
-function generateSyncCode(){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for(let i=0;i<8;i++) code += chars[Math.floor(Math.random()*chars.length)];
-  return code;
-}
-
-document.getElementById('syncStartBtn').onclick = ()=> startSync(generateSyncCode(), {pushInitial:true});
-document.getElementById('syncJoinBtn').onclick = ()=>{
-  const val = document.getElementById('syncCodeInput').value.trim();
-  if(!val){ showToastMsg('코드를 입력해주세요'); return; }
-  startSync(val, {pushInitial:false});
-};
-document.getElementById('syncStopBtn').onclick = async ()=>{
-  const ok = await showConfirm('동기화를 끄면 이 기기는 더 이상 다른 기기와 실시간으로 연결되지 않아요.\n계속할까요?');
-  if(!ok) return;
-  if(syncUnsub){ syncUnsub(); syncUnsub = null; }
-  syncCode = null;
-  localStorage.removeItem('shiftNoteSyncCode');
-  renderSyncStatus();
-  showToastMsg('동기화를 껐어요');
-};
-
-// (동기화 자동 재연결은 하단 INIT 섹션에서 loadState() 이후에 실행됩니다)
-
-// ================= 읽기전용 공유 링크 =================
-const urlParams = new URLSearchParams(location.search);
-const VIEW_SHARE_CODE = urlParams.get('view');
-
-let shareCode = localStorage.getItem('shiftNoteShareCode') || null;
-
-function renderShareStatus(){
-  const statusEl = document.getElementById('shareStatusText');
-  const linkBox = document.getElementById('shareLinkBox');
-  const createBtn = document.getElementById('shareCreateBtn');
-  if(shareCode){
-    const link = location.origin + location.pathname + '?view=' + shareCode;
-    document.getElementById('shareLinkInput').value = link;
-    linkBox.style.display = 'block';
-    createBtn.style.display = 'none';
-    statusEl.textContent = '공유 중이에요. 아래 링크를 받은 사람은 실시간으로 내 근무표를 볼 수 있어요 (수정은 못함).';
-  } else {
-    linkBox.style.display = 'none';
-    createBtn.style.display = 'block';
-    statusEl.textContent = '가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.';
-  }
-}
-
-function pushStateToShare(){
-  if(!shareCode || !ensureFirebaseInit()) return;
-  const payload = {
-    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
-    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
-  };
-  syncDb.collection('shiftNoteShare').doc(shareCode).set({
-    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(()=>{});
-}
-
-document.getElementById('shareCreateBtn').onclick = ()=>{
-  if(!ensureFirebaseInit()){ showToastMsg('동기화 기능이 아직 설정되지 않았어요'); return; }
-  shareCode = generateSyncCode();
-  localStorage.setItem('shiftNoteShareCode', shareCode);
-  renderShareStatus();
-  pushStateToShare();
-  showToastMsg('공유 링크가 만들어졌어요');
-};
-document.getElementById('shareCopyBtn').onclick = async ()=>{
-  const val = document.getElementById('shareLinkInput').value;
-  try{ await navigator.clipboard.writeText(val); showToastMsg('링크를 복사했어요'); }
-  catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
-};
-document.getElementById('shareRegenBtn').onclick = async ()=>{
-  const ok = await showConfirm('새 링크를 만들면 예전에 공유했던 링크는 더 이상 작동하지 않아요.\n계속할까요?');
-  if(!ok) return;
-  if(shareCode && ensureFirebaseInit()) syncDb.collection('shiftNoteShare').doc(shareCode).delete().catch(()=>{});
-  shareCode = generateSyncCode();
-  localStorage.setItem('shiftNoteShareCode', shareCode);
-  renderShareStatus();
-  pushStateToShare();
-  showToastMsg('새 공유 링크를 만들었어요');
-};
-document.getElementById('shareOffBtn').onclick = async ()=>{
-  const ok = await showConfirm('공유를 끄면 그 링크는 더 이상 작동하지 않아요.\n계속할까요?');
-  if(!ok) return;
-  if(shareCode && ensureFirebaseInit()) syncDb.collection('shiftNoteShare').doc(shareCode).delete().catch(()=>{});
-  shareCode = null;
-  localStorage.removeItem('shiftNoteShareCode');
-  renderShareStatus();
-  showToastMsg('공유를 껐어요');
-};
-
 // ================= DRAG PIN =================
 const pin = document.getElementById('startPin');
 let ghost = null;
@@ -2262,32 +2007,6 @@ document.getElementById('todayBtn').onclick=()=>{
   renderCalendar();
 };
 
-// 달력을 좌우로 스와이프하면 이전달/다음달로 이동
-(function setupCalendarSwipe(){
-  const grid = document.getElementById('calGrid');
-  let startX=0, startY=0, tracking=false, suppressClick=false;
-
-  grid.addEventListener('pointerdown', (e)=>{
-    startX = e.clientX; startY = e.clientY; tracking = true;
-  });
-  grid.addEventListener('pointerup', (e)=>{
-    if(!tracking) return;
-    tracking = false;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5){
-      suppressClick = true;
-      if(dx < 0) document.getElementById('nextMonth').click();
-      else document.getElementById('prevMonth').click();
-      setTimeout(()=>{ suppressClick = false; }, 60);
-    }
-  });
-  grid.addEventListener('pointercancel', ()=>{ tracking = false; });
-  // 스와이프 직후 발생하는 클릭이 날짜 칸의 수정 팝업을 열지 않도록 차단
-  grid.addEventListener('click', (e)=>{
-    if(suppressClick){ e.stopPropagation(); e.preventDefault(); }
-  }, true);
-})();
-
 // ================= 로컬 저장 (자동 저장/복원) =================
 const STORAGE_KEY = 'shiftNoteState_v1';
 
@@ -2328,53 +2047,20 @@ function loadState(){
 }
 
 // ================= INIT =================
-if(VIEW_SHARE_CODE){
-  // ---- 읽기전용 공유 화면: 이 기기의 저장된 데이터는 전혀 건드리지 않음 ----
-  document.getElementById('viewOnlyBanner').style.display = 'block';
-  document.getElementById('settingsBtn').style.display = 'none';
-  document.getElementById('shareBtn').style.display = 'none';
-  document.getElementById('editModeBtn').style.display = 'none';
-  state.editMode = false;
+loadState();
+ensureTimeDefaults();
+renderShiftTypeRows();
+renderTeamsBuilder();
 
-  ensureTimeDefaults();
-  renderShiftTypeRows();
-  renderTeamsBuilder();
-  renderAlarmList();
-  renderLegend();
-  renderCalendar();
-  renderNowCard();
-  updateMyTeamHint();
+renderAlarmList();
+renderLegend();
+renderCalendar();
+renderNowCard();
+updateMyTeamHint();
 
-  if(ensureFirebaseInit()){
-    syncDb.collection('shiftNoteShare').doc(VIEW_SHARE_CODE).onSnapshot((doc)=>{
-      const data = doc.data();
-      if(data && data.payload) applyRemoteState(data.payload);
-    }, ()=>{ showToastMsg('공유 데이터를 불러오지 못했어요'); });
-  } else {
-    showToastMsg('공유 기능이 아직 설정되지 않았어요');
-  }
-} else {
-  // ---- 일반(소유자) 모드 ----
-  loadState();
-  ensureTimeDefaults();
-  renderShiftTypeRows();
-  renderTeamsBuilder();
-
-  renderAlarmList();
-  renderLegend();
-  renderCalendar();
-  renderNowCard();
-  updateMyTeamHint();
-
-  if(syncCode) startSync(syncCode, {pushInitial:false});
-  else renderSyncStatus();
-  renderShareStatus();
-
-  const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); };
-  setInterval(saveAll, 4000); // 4초마다 자동 저장 (로컬 + 동기화/공유 켜져있으면 클라우드까지)
-  window.addEventListener('beforeunload', saveAll);
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
-}
+setInterval(saveState, 4000); // 4초마다 자동 저장
+window.addEventListener('beforeunload', saveState);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveState(); });
 
 // ================= PWA: SERVICE WORKER 등록 =================
 if('serviceWorker' in navigator){
