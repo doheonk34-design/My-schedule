@@ -4,15 +4,15 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="3dp"
-    android:minHeight="40dp">
+    android:padding="4dp"
+    android:minHeight="52dp">
 
     <TextView
         android:id="@+id/cell_date"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#E7EAF0"
-        android:textSize="12sp"
+        android:textSize="13sp"
         android:gravity="start" />
 
     <TextView
@@ -20,7 +20,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#8992A6"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:textStyle="bold"
         android:maxLines="1"
         android:ellipsize="end"
@@ -31,5 +31,5 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="2dp" />
+        android:layout_marginTop="3dp" />
 </LinearLayout>
