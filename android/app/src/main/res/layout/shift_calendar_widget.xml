@@ -12,22 +12,22 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#E7EAF0"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="bold"
-        android:layout_marginBottom="2dp"
+        android:layout_marginBottom="3dp"
         android:text="달력" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#FF7C7C" android:textSize="8sp" android:textStyle="bold" android:text="일" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="8sp" android:textStyle="bold" android:text="월" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="8sp" android:textStyle="bold" android:text="화" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="8sp" android:textStyle="bold" android:text="수" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="8sp" android:textStyle="bold" android:text="목" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="8sp" android:textStyle="bold" android:text="금" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#7CA8FF" android:textSize="8sp" android:textStyle="bold" android:text="토" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#FF7C7C" android:textSize="9sp" android:textStyle="bold" android:text="일" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="9sp" android:textStyle="bold" android:text="월" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="9sp" android:textStyle="bold" android:text="화" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="9sp" android:textStyle="bold" android:text="수" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="9sp" android:textStyle="bold" android:text="목" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#8992A6" android:textSize="9sp" android:textStyle="bold" android:text="금" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:textColor="#7CA8FF" android:textSize="9sp" android:textStyle="bold" android:text="토" />
     </LinearLayout>
 
     <GridView

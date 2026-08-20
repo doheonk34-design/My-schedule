@@ -291,10 +291,11 @@
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
   .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:3px;}
   .day-cell .note-chip{
-    display:flex; flex-direction:column; line-height:1.15; font-size:7px; font-weight:700;
-    color:var(--standby); margin-left:auto; text-align:right; flex-shrink:0;
+    position:absolute; top:4px; right:5px; z-index:1;
+    display:flex; flex-direction:column; align-items:flex-end; line-height:1.15;
+    font-size:7px; font-weight:700; color:var(--standby); pointer-events:none;
   }
-  .day-cell .note-chip b{font-weight:700;}
+  .day-cell .note-chip b{font-weight:700; white-space:nowrap;}
   .day-cell .dots i{width:5px;height:5px;border-radius:50%;display:block; flex-shrink:0;}
   .day-cell.flash{animation:flashcell .5s ease;}
   .day-cell.hover-target{
@@ -1279,7 +1280,7 @@ function buildDayCellEl(date, interactive){
   const notes = getNotesForDate(date);
   if(notes.length){
     const tooltip = notes.map(n=>(n.time?n.time+' ':'')+n.text).join(' / ');
-    noteHtml = `<span class="note-chip" title="${escapeHtml(tooltip)}"><b>일정</b><b>${notes.length}개</b></span>`;
+    noteHtml = `<div class="note-chip" title="${escapeHtml(tooltip)}"><b>일정</b><b>${notes.length}개</b></div>`;
   }
 
   const holidayName = getHolidayName(date);
@@ -1290,9 +1291,9 @@ function buildDayCellEl(date, interactive){
     ${numHtml}
     <div class="mylabel-row">
       <span class="mylabel" style="color:${mine.color}">${mine.label}</span>
-      ${noteHtml}
     </div>
     <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${d.label}"></i>`).join('')}</div>
+    ${noteHtml}
   `;
   if(interactive){
     cell.onclick = ()=>{
@@ -1749,14 +1750,19 @@ function computeNotesWidgetColumns(){
     ? todays.slice(0,3).map(n=>(n.time?n.time+' ':'')+n.text).join('\n')
     : '일정 없음';
 
+  const todayISO = isoDate(now);
   const upcomingLines = [];
-  for(let d=1; d<=30 && upcomingLines.length<3; d++){
-    const date = addDays(startOfDay(now), d);
-    const notes = getNotesForDate(date);
-    notes.forEach(n=>{
-      if(upcomingLines.length<3) upcomingLines.push((date.getMonth()+1)+'/'+date.getDate()+' '+n.text);
+  Object.keys(state.notes)
+    .filter(iso => iso > todayISO) // 오늘 이후 날짜만 (몇 달 뒤든 상관없이 전부 대상)
+    .sort() // ISO 형식(YYYY-MM-DD)이라 문자열 정렬이 곧 날짜순 정렬
+    .forEach(iso => {
+      if(upcomingLines.length>=3) return;
+      const notes = state.notes[iso];
+      const date = new Date(iso+'T00:00:00');
+      notes.forEach(n=>{
+        if(upcomingLines.length<3) upcomingLines.push((date.getMonth()+1)+'/'+date.getDate()+' '+n.text);
+      });
     });
-  }
   const upcomingText = upcomingLines.length ? upcomingLines.join('\n') : '일정 없음';
 
   return { today: todayText, upcoming: upcomingText };
