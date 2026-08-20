@@ -27,8 +27,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="#E7EAF0"
-            android:textSize="11sp"
-            android:maxLines="3"
+            android:textSize="10sp"
+            android:maxLines="6"
             android:text="일정 없음" />
     </LinearLayout>
 
@@ -60,8 +60,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="#E7EAF0"
-            android:textSize="11sp"
-            android:maxLines="3"
+            android:textSize="10sp"
+            android:maxLines="6"
             android:text="일정 없음" />
     </LinearLayout>
 </LinearLayout>
