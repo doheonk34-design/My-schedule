@@ -1726,6 +1726,7 @@ function computeCalendarWidgetCells(){
       label: mine.label || '',
       labelColor: mine.color || '',
       today: sameDay(date, now),
+      red: isRedDay(date),
       dots
     });
   }

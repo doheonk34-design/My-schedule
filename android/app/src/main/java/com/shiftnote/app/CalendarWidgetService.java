@@ -69,10 +69,11 @@ class CalendarRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactor
         String label = cell.optString("label", "");
         String labelColor = cell.optString("labelColor", "");
         boolean today = cell.optBoolean("today", false);
+        boolean red = cell.optBoolean("red", false);
         JSONArray dots = cell.optJSONArray("dots");
 
         views.setTextViewText(R.id.cell_date, day);
-        views.setInt(R.id.cell_date, "setTextColor", today ? Color.parseColor("#FF5D5D") : Color.parseColor("#E7EAF0"));
+        views.setInt(R.id.cell_date, "setTextColor", (today || red) ? Color.parseColor("#FF5D5D") : Color.parseColor("#E7EAF0"));
         views.setInt(R.id.cell_root, "setBackgroundResource", today ? R.drawable.widget_today_ring : android.R.color.transparent);
 
         views.setTextViewText(R.id.cell_label, label);
