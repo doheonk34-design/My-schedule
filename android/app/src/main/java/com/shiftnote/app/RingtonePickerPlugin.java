@@ -4,6 +4,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
@@ -115,6 +116,29 @@ public class RingtonePickerPlugin extends Plugin {
             manager.createNotificationChannel(channel);
         }
 
+        call.resolve();
+    }
+
+    /**
+     * 홈 화면 위젯에 표시할 "오늘의 근무" 정보를 저장하고, 붙어있는 위젯을 즉시 새로고침한다.
+     */
+    @PluginMethod
+    public void updateWidget(PluginCall call) {
+        String label = call.getString("label", "-");
+        String range = call.getString("range", "");
+        String team = call.getString("team", "");
+        String color = call.getString("color", "#6C7BFF");
+
+        Context context = getContext();
+        SharedPreferences prefs = context.getSharedPreferences(ShiftWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit()
+            .putString(ShiftWidgetProvider.PREF_LABEL, label)
+            .putString(ShiftWidgetProvider.PREF_RANGE, range)
+            .putString(ShiftWidgetProvider.PREF_TEAM, team)
+            .putString(ShiftWidgetProvider.PREF_COLOR, color)
+            .apply();
+
+        ShiftWidgetProvider.updateAll(context);
         call.resolve();
     }
 }

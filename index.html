@@ -1344,6 +1344,7 @@ function setStartDate(date, showToast){
   
   renderNowCard();
   rescheduleLocalAlarms();
+  updateNativeWidget();
   if(showToast) showToastMsg(`${date.getMonth()+1}월 ${date.getDate()}일을 ${team.name} 주간 첫날로 지정 — 전체 일정이 갱신되었습니다`);
 }
 
@@ -1686,6 +1687,24 @@ async function setupNotificationChannels(){
   }
 }
 
+// ================= 홈 화면 위젯 업데이트 =================
+function updateNativeWidget(){
+  if(!CAP_NATIVE || !RingtonePickerPlugin) return;
+  try{
+    const now = new Date();
+    const t = shiftForTeamOnDate(now, state.myTeamId);
+    const team = state.teams.find(tt=>tt.id===state.myTeamId);
+    const matched = state.shiftTypes.find(st=>st.name===t.label);
+    const times = matched ? state.shiftTimes[matched.id] : null;
+    RingtonePickerPlugin.updateWidget({
+      label: t.label || '-',
+      range: (times && times.start) ? (times.start+'–'+times.end) : '',
+      team: team ? team.name : '',
+      color: t.color || '#6C7BFF'
+    });
+  }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
+}
+
 const ALARM_ID_BASE = 100000;
 async function rescheduleLocalAlarms(){
   if(!CAP_NATIVE || !LocalNotificationsPlugin) return;
@@ -1795,6 +1814,7 @@ function closeSettingsModalKeep(){
   settingsSnapshot = null;
   settingsModal.classList.remove('show');
   rescheduleLocalAlarms();
+  updateNativeWidget();
   showToastMsg('설정이 저장되었습니다');
 }
 function closeSettingsModalCancel(){
@@ -1802,6 +1822,7 @@ function closeSettingsModalCancel(){
   settingsSnapshot = null;
   settingsModal.classList.remove('show');
   rescheduleLocalAlarms();
+  updateNativeWidget();
   showToastMsg('변경사항이 취소되었습니다');
 }
 
@@ -2178,6 +2199,7 @@ editModal.addEventListener('click', (e)=>{ if(e.target===editModal){ revertModal
 document.getElementById('modalSave').onclick = ()=>{
   editModal.classList.remove('show');
   rescheduleLocalAlarms();
+  updateNativeWidget();
   showToastMsg((modalDate.getMonth()+1)+'월 '+modalDate.getDate()+'일 근무가 저장되었습니다');
 };
 
@@ -2193,6 +2215,7 @@ document.getElementById('modalReset').onclick = ()=>{
   
   renderNowCard();
   rescheduleLocalAlarms();
+  updateNativeWidget();
   showToastMsg('해당 날짜가 자동 계산으로 되돌아갔습니다');
 };
 
@@ -2354,6 +2377,7 @@ function applyRemoteState(data){
   renderCalendar(); renderNowCard(); updateMyTeamHint();
   saveState();
   rescheduleLocalAlarms();
+  updateNativeWidget();
   showToastMsg('다른 기기의 변경사항을 받아왔어요 🔄');
 }
 
@@ -2667,6 +2691,7 @@ if(VIEW_SHARE_CODE){
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
 
   setupNotificationChannels().then(()=> rescheduleLocalAlarms());
+  updateNativeWidget();
 }
 
 // ================= PWA: SERVICE WORKER 등록 =================
