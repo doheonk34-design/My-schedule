@@ -5,22 +5,25 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="2dp"
-    android:minHeight="34dp">
+    android:minHeight="38dp">
 
     <TextView
         android:id="@+id/cell_date"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#E7EAF0"
-        android:textSize="8sp"
+        android:textSize="9sp"
         android:gravity="start" />
 
     <TextView
         android:id="@+id/cell_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="7sp"
+        android:textColor="#8992A6"
+        android:textSize="8sp"
+        android:textStyle="bold"
         android:maxLines="1"
+        android:ellipsize="end"
         android:gravity="start" />
 
     <LinearLayout
@@ -28,5 +31,5 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="1dp" />
+        android:layout_marginTop="2dp" />
 </LinearLayout>

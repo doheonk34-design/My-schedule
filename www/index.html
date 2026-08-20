@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>교대노트 · 교대근무 스케줄 프로토타입</title>
 
 <link rel="manifest" href="./manifest.json">
@@ -291,10 +291,10 @@
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
   .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:3px;}
   .day-cell .note-chip{
-    display:inline-block; font-size:8px; font-weight:600; color:var(--standby);
-    background:#2E7D6B22; border:1px solid #37D6B055; border-radius:4px; padding:1px 5px;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex-shrink:1;
+    display:flex; flex-direction:column; line-height:1.15; font-size:7px; font-weight:700;
+    color:var(--standby); margin-left:auto; text-align:right; flex-shrink:0;
   }
+  .day-cell .note-chip b{font-weight:700;}
   .day-cell .dots i{width:5px;height:5px;border-radius:50%;display:block; flex-shrink:0;}
   .day-cell.flash{animation:flashcell .5s ease;}
   .day-cell.hover-target{
@@ -1278,10 +1278,8 @@ function buildDayCellEl(date, interactive){
   let noteHtml = '';
   const notes = getNotesForDate(date);
   if(notes.length){
-    const first = notes[0].text;
-    const extra = notes.length>1 ? ` 외 ${notes.length-1}건` : '';
     const tooltip = notes.map(n=>(n.time?n.time+' ':'')+n.text).join(' / ');
-    noteHtml = `<span class="note-chip" title="${escapeHtml(tooltip)}">${escapeHtml(first)}${extra}</span>`;
+    noteHtml = `<span class="note-chip" title="${escapeHtml(tooltip)}"><b>일정</b><b>${notes.length}개</b></span>`;
   }
 
   const holidayName = getHolidayName(date);
@@ -2449,6 +2447,8 @@ function applyRemoteState(data){
   showToastMsg('다른 기기의 변경사항을 받아왔어요 🔄');
 }
 
+let syncReadyToPush = false; // 재연결 시 클라우드의 진짜 최신 데이터를 받기 전까지는 절대 push하지 않음
+
 function startSync(code, opts){
   opts = opts || {};
   if(!ensureFirebaseInit()){
@@ -2457,8 +2457,10 @@ function startSync(code, opts){
   }
   syncCode = code.trim().toUpperCase();
   localStorage.setItem('shiftNoteSyncCode', syncCode);
+  syncReadyToPush = !!opts.pushInitial; // 새로 코드를 만드는 경우만 바로 push 허용, 참여/재연결은 첫 응답을 받을 때까지 대기
   if(syncUnsub) syncUnsub();
   syncUnsub = syncDb.collection('shiftNoteSync').doc(syncCode).onSnapshot((doc)=>{
+    syncReadyToPush = true; // 서버로부터 (내용이 있든 없든) 한 번이라도 응답을 받으면, 이제부터는 이 기기가 최신 상태를 아는 것
     if(doc.metadata.hasPendingWrites) return; // 내가 방금 쓴, 아직 서버 확인 전인 변경은 무시
     const data = doc.data();
     if(!data || !data.payload) return;
@@ -2475,7 +2477,7 @@ function startSync(code, opts){
 }
 
 function pushStateToCloud(){
-  if(!syncDb || !syncCode) return;
+  if(!syncDb || !syncCode || !stateReady || !syncReadyToPush) return;
   const payload = buildSyncPayload();
   const payloadJSON = stableStringify(payload);
   if(payloadJSON === lastSyncedPayloadJSON) return; // 마지막과 똑같으면 전송 생략 (불필요한 통신/배터리 소모 방지)
@@ -2535,7 +2537,7 @@ function renderShareStatus(){
 
 let lastSharedPayloadJSON = null;
 function pushStateToShare(){
-  if(!shareCode || !ensureFirebaseInit()) return;
+  if(!shareCode || !stateReady || !ensureFirebaseInit()) return;
   const payload = buildSyncPayload();
   const payloadJSON = stableStringify(payload);
   if(payloadJSON === lastSharedPayloadJSON) return; // 변경 없으면 전송 생략
@@ -2674,7 +2676,12 @@ document.getElementById('todayBtn').onclick=()=>{
 // ================= 로컬 저장 (자동 저장/복원) =================
 const STORAGE_KEY = 'shiftNoteState_v1';
 
+let stateReady = false; // loadState()가 끝나기 전까지는 저장/전송을 절대 하지 않음
+                         // (이게 없으면, 아직 불러오기 전인 '빈 기본 상태'가 실수로 저장되면서
+                         //  진짜 저장돼있던 메모/근무표를 덮어써버리는 사고가 날 수 있음)
+
 function saveState(){
+  if(!stateReady) return;
   try{
     const snapshot = {
       shiftTypes: state.shiftTypes,
@@ -2739,6 +2746,7 @@ if(VIEW_SHARE_CODE){
 } else {
   // ---- 일반(소유자) 모드 ----
   loadState();
+  stateReady = true; // 여기서부터는 저장/전송해도 안전함 (그 전엔 절대 안 함)
   ensureTimeDefaults();
   renderShiftTypeRows();
   renderTeamsBuilder();
