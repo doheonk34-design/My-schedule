@@ -167,11 +167,15 @@ public class RingtonePickerPlugin extends Plugin {
      */
     @PluginMethod
     public void updateNotesWidget(PluginCall call) {
-        String text = call.getString("text", "등록된 일정이 없어요");
+        String today = call.getString("today", "일정 없음");
+        String upcoming = call.getString("upcoming", "일정 없음");
 
         Context context = getContext();
         SharedPreferences prefs = context.getSharedPreferences(ShiftNotesWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString(ShiftNotesWidgetProvider.PREF_TEXT, text).apply();
+        prefs.edit()
+            .putString(ShiftNotesWidgetProvider.PREF_TODAY, today)
+            .putString(ShiftNotesWidgetProvider.PREF_UPCOMING, upcoming)
+            .apply();
 
         ShiftNotesWidgetProvider.updateAll(context);
         call.resolve();

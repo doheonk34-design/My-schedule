@@ -58,14 +58,26 @@ public class ShiftCalendarWidgetProvider extends AppWidgetProvider {
                     boolean isToday = cell.optBoolean("today", false);
 
                     views.setTextViewText(cellId, day);
-                    if (!color.isEmpty()) {
-                        try {
-                            views.setInt(cellId, "setBackgroundColor", Color.parseColor(color));
-                        } catch (Exception ignored) {}
+
+                    // 앱 화면과 같은 느낌: 배경을 색으로 채우지 않고, 날짜 숫자만 근무 색으로 표시.
+                    // 오늘 날짜는 배경 대신 얇은 테두리(링)로만 강조.
+                    if (isToday) {
+                        views.setInt(cellId, "setBackgroundResource", R.drawable.widget_today_ring);
                     } else {
                         views.setInt(cellId, "setBackgroundColor", Color.TRANSPARENT);
                     }
-                    views.setInt(cellId, "setTextColor", isToday ? Color.parseColor("#FF5D5D") : Color.parseColor("#E7EAF0"));
+
+                    if (day.isEmpty()) {
+                        views.setInt(cellId, "setTextColor", Color.TRANSPARENT);
+                    } else if (!color.isEmpty()) {
+                        try {
+                            views.setInt(cellId, "setTextColor", Color.parseColor(color));
+                        } catch (Exception ignored) {
+                            views.setInt(cellId, "setTextColor", Color.parseColor("#E7EAF0"));
+                        }
+                    } else {
+                        views.setInt(cellId, "setTextColor", Color.parseColor("#E7EAF0"));
+                    }
                 } else {
                     views.setTextViewText(cellId, "");
                     views.setInt(cellId, "setBackgroundColor", Color.TRANSPARENT);

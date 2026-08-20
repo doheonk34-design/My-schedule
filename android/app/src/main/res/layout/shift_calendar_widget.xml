@@ -5,16 +5,16 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="10dp">
+    android:padding="8dp">
 
     <TextView
         android:id="@+id/cal_widget_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#E7EAF0"
-        android:textSize="14sp"
+        android:textSize="11sp"
         android:textStyle="bold"
-        android:layout_marginBottom="4dp"
+        android:layout_marginBottom="2dp"
         android:text="달력" />
 
     <LinearLayout
@@ -27,7 +27,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#FF7C7C"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="일" />
             <TextView
@@ -36,7 +36,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#8992A6"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="월" />
             <TextView
@@ -45,7 +45,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#8992A6"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="화" />
             <TextView
@@ -54,7 +54,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#8992A6"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="수" />
             <TextView
@@ -63,7 +63,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#8992A6"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="목" />
             <TextView
@@ -72,7 +72,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#8992A6"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="금" />
             <TextView
@@ -81,7 +81,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#7CA8FF"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold"
                 android:text="토" />
     </LinearLayout>
@@ -98,7 +98,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_1"
@@ -107,7 +107,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_2"
@@ -116,7 +116,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_3"
@@ -125,7 +125,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_4"
@@ -134,7 +134,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_5"
@@ -143,7 +143,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_6"
@@ -152,7 +152,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
         <LinearLayout
@@ -167,7 +167,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_8"
@@ -176,7 +176,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_9"
@@ -185,7 +185,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_10"
@@ -194,7 +194,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_11"
@@ -203,7 +203,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_12"
@@ -212,7 +212,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_13"
@@ -221,7 +221,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
         <LinearLayout
@@ -236,7 +236,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_15"
@@ -245,7 +245,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_16"
@@ -254,7 +254,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_17"
@@ -263,7 +263,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_18"
@@ -272,7 +272,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_19"
@@ -281,7 +281,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_20"
@@ -290,7 +290,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
         <LinearLayout
@@ -305,7 +305,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_22"
@@ -314,7 +314,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_23"
@@ -323,7 +323,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_24"
@@ -332,7 +332,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_25"
@@ -341,7 +341,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_26"
@@ -350,7 +350,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_27"
@@ -359,7 +359,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
         <LinearLayout
@@ -374,7 +374,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_29"
@@ -383,7 +383,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_30"
@@ -392,7 +392,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_31"
@@ -401,7 +401,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_32"
@@ -410,7 +410,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_33"
@@ -419,7 +419,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_34"
@@ -428,7 +428,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
         <LinearLayout
@@ -443,7 +443,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_36"
@@ -452,7 +452,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_37"
@@ -461,7 +461,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_38"
@@ -470,7 +470,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_39"
@@ -479,7 +479,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_40"
@@ -488,7 +488,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
             <TextView
                 android:id="@+id/cal_cell_41"
@@ -497,7 +497,7 @@
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#E7EAF0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:text="" />
         </LinearLayout>
 

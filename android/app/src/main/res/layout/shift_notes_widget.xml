@@ -4,25 +4,63 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:gravity="center_vertical"
     android:background="@drawable/widget_background"
-    android:padding="12dp">
+    android:padding="10dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="📝"
-        android:textSize="18sp"
-        android:layout_marginEnd="8dp" />
-
-    <TextView
-        android:id="@+id/notes_widget_text"
+    <LinearLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_weight="1"
-        android:textColor="#E7EAF0"
-        android:textSize="13sp"
-        android:maxLines="2"
-        android:ellipsize="end"
-        android:text="등록된 일정이 없어요" />
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="오늘"
+            android:textColor="#8992A6"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:id="@+id/notes_widget_today"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E7EAF0"
+            android:textSize="11sp"
+            android:maxLines="3"
+            android:text="일정 없음" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="#2A2F3A" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="다가오는 일정"
+            android:textColor="#8992A6"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:id="@+id/notes_widget_upcoming"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E7EAF0"
+            android:textSize="11sp"
+            android:maxLines="3"
+            android:text="일정 없음" />
+    </LinearLayout>
 </LinearLayout>

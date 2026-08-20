@@ -275,8 +275,8 @@
 
   .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; touch-action:pan-y;}
   .day-cell{
-    height:92px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
-    padding:5px; cursor:pointer; position:relative; overflow:hidden;
+    height:72px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
+    padding:4px 5px; cursor:pointer; position:relative; overflow:hidden;
     display:flex; flex-direction:column;
     transition:transform .15s ease, background .2s ease;
   }
@@ -287,12 +287,12 @@
   .day-cell .num{font-size:11px; color:var(--sub); font-family:'JetBrains Mono',monospace; flex-shrink:0;}
   .day-cell .num.red-day{color:#FF5D5D; font-weight:700;}
   .day-cell .holiday-name{font-size:7px; color:#FF5D5D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:4px; overflow:hidden;}
+  .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:2px; overflow:hidden;}
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
-  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:4px;}
+  .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:3px;}
   .day-cell .note-chip{
-    font-size:8px; color:var(--sub); margin-top:3px; background:var(--panel);
-    border-radius:4px; padding:1px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    display:inline-block; font-size:8px; font-weight:700; color:var(--standby); margin-top:2px;
+    background:#2E7D6B22; border:1px solid #37D6B055; border-radius:4px; padding:1px 5px; width:fit-content;
   }
   .day-cell .dots i{width:5px;height:5px;border-radius:50%;display:block; flex-shrink:0;}
   .day-cell.flash{animation:flashcell .5s ease;}
@@ -1277,11 +1277,8 @@ function buildDayCellEl(date, interactive){
   let noteHtml = '';
   const notes = getNotesForDate(date);
   if(notes.length){
-    const first = notes[0];
-    const firstLabel = (first.time ? first.time+' ' : '') + first.text;
-    const moreCount = notes.length-1;
     const tooltip = notes.map(n=>(n.time?n.time+' ':'')+n.text).join(' / ');
-    noteHtml = `<div class="note-chip" title="${escapeHtml(tooltip)}">📝 ${escapeHtml(firstLabel)}${moreCount>0?' +'+moreCount:''}</div>`;
+    noteHtml = `<div class="note-chip" title="${escapeHtml(tooltip)}">${notes.length}일정</div>`;
   }
 
   const holidayName = getHolidayName(date);
@@ -1735,29 +1732,32 @@ function updateNativeCalendarWidget(){
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
 }
 
-// ---- 4x1 메모/일정 전용 위젯: 오늘 + 가장 가까운 다음 일정을 한 줄 요약으로 전달 ----
-function computeNotesWidgetText(){
+// ---- 4x1 메모/일정 전용 위젯: 왼쪽 = 오늘 일정, 오른쪽 = 다가오는 일정(순서대로) ----
+function computeNotesWidgetColumns(){
   const now = new Date();
-  const parts = [];
+
   const todays = getNotesForDate(now);
-  if(todays.length){
-    const first = todays[0];
-    parts.push('오늘: '+(first.time?first.time+' ':'')+first.text+(todays.length>1?' 외 '+(todays.length-1)+'건':''));
-  }
-  for(let d=1; d<=14; d++){
+  const todayText = todays.length
+    ? todays.slice(0,3).map(n=>(n.time?n.time+' ':'')+n.text).join('\n')
+    : '일정 없음';
+
+  const upcomingLines = [];
+  for(let d=1; d<=30 && upcomingLines.length<3; d++){
     const date = addDays(startOfDay(now), d);
     const notes = getNotesForDate(date);
-    if(notes.length){
-      parts.push((date.getMonth()+1)+'/'+date.getDate()+': '+notes[0].text);
-      break;
-    }
+    notes.forEach(n=>{
+      if(upcomingLines.length<3) upcomingLines.push((date.getMonth()+1)+'/'+date.getDate()+' '+n.text);
+    });
   }
-  return parts.length ? parts.join(' · ') : '등록된 일정이 없어요';
+  const upcomingText = upcomingLines.length ? upcomingLines.join('\n') : '일정 없음';
+
+  return { today: todayText, upcoming: upcomingText };
 }
 function updateNativeNotesWidget(){
   if(!CAP_NATIVE || !RingtonePickerPlugin) return;
   try{
-    RingtonePickerPlugin.updateNotesWidget({ text: computeNotesWidgetText() });
+    const cols = computeNotesWidgetColumns();
+    RingtonePickerPlugin.updateNotesWidget(cols);
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
 }
 

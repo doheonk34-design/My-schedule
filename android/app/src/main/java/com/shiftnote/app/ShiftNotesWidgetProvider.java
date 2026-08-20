@@ -12,7 +12,8 @@ import android.widget.RemoteViews;
 public class ShiftNotesWidgetProvider extends AppWidgetProvider {
 
     public static final String PREFS_NAME = "com.shiftnote.app.notesWidget";
-    public static final String PREF_TEXT = "text";
+    public static final String PREF_TODAY = "today";
+    public static final String PREF_UPCOMING = "upcoming";
 
     public static void updateAll(Context context) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(context);
@@ -35,10 +36,12 @@ public class ShiftNotesWidgetProvider extends AppWidgetProvider {
 
     private void updateOne(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String text = prefs.getString(PREF_TEXT, "등록된 일정이 없어요");
+        String today = prefs.getString(PREF_TODAY, "일정 없음");
+        String upcoming = prefs.getString(PREF_UPCOMING, "일정 없음");
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.shift_notes_widget);
-        views.setTextViewText(R.id.notes_widget_text, text);
+        views.setTextViewText(R.id.notes_widget_today, today);
+        views.setTextViewText(R.id.notes_widget_upcoming, upcoming);
 
         Intent intent = new Intent(context, MainActivity.class);
         PendingIntent pending = PendingIntent.getActivity(
