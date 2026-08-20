@@ -1278,7 +1278,7 @@ function buildDayCellEl(date, interactive){
   const notes = getNotesForDate(date);
   if(notes.length){
     const tooltip = notes.map(n=>(n.time?n.time+' ':'')+n.text).join(' / ');
-    noteHtml = `<div class="note-row" title="${escapeHtml(tooltip)}">일정 ${notes.length}개</div>`;
+    noteHtml = `<div class="note-row" title="${escapeHtml(tooltip)}">${notes.length}개</div>`;
   }
 
   const holidayName = getHolidayName(date);
