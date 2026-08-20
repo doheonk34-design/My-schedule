@@ -275,7 +275,7 @@
 
   .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; touch-action:pan-y;}
   .day-cell{
-    height:72px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
+    height:64px; border-radius:10px; background:var(--panel-alt); border:1px solid transparent;
     padding:4px 5px; cursor:pointer; position:relative; overflow:hidden;
     display:flex; flex-direction:column;
     transition:transform .15s ease, background .2s ease;
@@ -287,12 +287,13 @@
   .day-cell .num{font-size:11px; color:var(--sub); font-family:'JetBrains Mono',monospace; flex-shrink:0;}
   .day-cell .num.red-day{color:#FF5D5D; font-weight:700;}
   .day-cell .holiday-name{font-size:7px; color:#FF5D5D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .day-cell .mylabel-row{display:flex; align-items:baseline; gap:5px; margin-top:2px; overflow:hidden;}
+  .day-cell .mylabel-row{display:flex; align-items:center; gap:4px; margin-top:2px; overflow:hidden;}
   .day-cell .mylabel{font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;}
   .day-cell .dots{display:flex; gap:2px; margin-top:auto; flex-wrap:nowrap; padding-top:3px;}
   .day-cell .note-chip{
-    display:inline-block; font-size:8px; font-weight:700; color:var(--standby); margin-top:2px;
-    background:#2E7D6B22; border:1px solid #37D6B055; border-radius:4px; padding:1px 5px; width:fit-content;
+    display:inline-block; font-size:8px; font-weight:600; color:var(--standby);
+    background:#2E7D6B22; border:1px solid #37D6B055; border-radius:4px; padding:1px 5px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex-shrink:1;
   }
   .day-cell .dots i{width:5px;height:5px;border-radius:50%;display:block; flex-shrink:0;}
   .day-cell.flash{animation:flashcell .5s ease;}
@@ -1277,8 +1278,10 @@ function buildDayCellEl(date, interactive){
   let noteHtml = '';
   const notes = getNotesForDate(date);
   if(notes.length){
+    const first = notes[0].text;
+    const extra = notes.length>1 ? ` 외 ${notes.length-1}건` : '';
     const tooltip = notes.map(n=>(n.time?n.time+' ':'')+n.text).join(' / ');
-    noteHtml = `<div class="note-chip" title="${escapeHtml(tooltip)}">${notes.length}일정</div>`;
+    noteHtml = `<span class="note-chip" title="${escapeHtml(tooltip)}">${escapeHtml(first)}${extra}</span>`;
   }
 
   const holidayName = getHolidayName(date);
@@ -1289,8 +1292,8 @@ function buildDayCellEl(date, interactive){
     ${numHtml}
     <div class="mylabel-row">
       <span class="mylabel" style="color:${mine.color}">${mine.label}</span>
+      ${noteHtml}
     </div>
-    ${noteHtml}
     <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${d.label}"></i>`).join('')}</div>
   `;
   if(interactive){
@@ -1715,12 +1718,19 @@ function computeCalendarWidgetCells(){
   for(let i=0;i<42;i++){
     const dayNum = i-startOffset+1;
     if(dayNum<1 || dayNum>daysInMonth){
-      cells.push({day:'', color:'', today:false});
+      cells.push({day:'', label:'', labelColor:'', today:false, dots:[]});
       continue;
     }
     const date = new Date(y,m,dayNum);
-    const s = shiftForTeamOnDate(date, state.myTeamId);
-    cells.push({day:String(dayNum), color: s.color||'', today: sameDay(date, now)});
+    const mine = shiftForTeamOnDate(date, state.myTeamId);
+    const dots = state.teams.map(t=>shiftForTeamOnDate(date,t.id).color||'').filter(c=>c);
+    cells.push({
+      day: String(dayNum),
+      label: mine.label || '',
+      labelColor: mine.color || '',
+      today: sameDay(date, now),
+      dots
+    });
   }
   return {title: y+'년 '+(m+1)+'월', cells};
 }

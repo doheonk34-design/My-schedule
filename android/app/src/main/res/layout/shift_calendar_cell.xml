@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cell_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="2dp"
+    android:minHeight="34dp">
+
+    <TextView
+        android:id="@+id/cell_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#E7EAF0"
+        android:textSize="8sp"
+        android:gravity="start" />
+
+    <TextView
+        android:id="@+id/cell_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="7sp"
+        android:maxLines="1"
+        android:gravity="start" />
+
+    <LinearLayout
+        android:id="@+id/cell_dots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="1dp" />
+</LinearLayout>

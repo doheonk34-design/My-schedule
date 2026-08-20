@@ -32,12 +32,13 @@
             android:text="일정 없음" />
     </LinearLayout>
 
-    <View
+    <LinearLayout
         android:layout_width="1dp"
         android:layout_height="match_parent"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
-        android:background="#2A2F3A" />
+        android:background="#2A2F3A"
+        android:orientation="vertical" />
 
     <LinearLayout
         android:layout_width="0dp"
