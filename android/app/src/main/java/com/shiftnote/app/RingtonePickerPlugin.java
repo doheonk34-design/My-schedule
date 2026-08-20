@@ -141,4 +141,39 @@ public class RingtonePickerPlugin extends Plugin {
         ShiftWidgetProvider.updateAll(context);
         call.resolve();
     }
+
+    /**
+     * 4x4 달력 위젯 갱신 - JS에서 이번달 42칸(6주 x 7일) 데이터를 JSON 배열로 넘겨받아 저장.
+     * 각 칸: {day: "21", color: "#FFB648", today: true/false}
+     */
+    @PluginMethod
+    public void updateCalendarWidget(PluginCall call) {
+        String title = call.getString("title", "");
+        com.getcapacitor.JSArray cells = call.getArray("cells");
+
+        Context context = getContext();
+        SharedPreferences prefs = context.getSharedPreferences(ShiftCalendarWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit()
+            .putString(ShiftCalendarWidgetProvider.PREF_TITLE, title)
+            .putString(ShiftCalendarWidgetProvider.PREF_CELLS, cells != null ? cells.toString() : "[]")
+            .apply();
+
+        ShiftCalendarWidgetProvider.updateAll(context);
+        call.resolve();
+    }
+
+    /**
+     * 4x1 메모/일정 전용 위젯 갱신 - JS에서 이미 보기 좋게 만든 요약 문자열 하나를 그대로 받아 표시.
+     */
+    @PluginMethod
+    public void updateNotesWidget(PluginCall call) {
+        String text = call.getString("text", "등록된 일정이 없어요");
+
+        Context context = getContext();
+        SharedPreferences prefs = context.getSharedPreferences(ShiftNotesWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(ShiftNotesWidgetProvider.PREF_TEXT, text).apply();
+
+        ShiftNotesWidgetProvider.updateAll(context);
+        call.resolve();
+    }
 }

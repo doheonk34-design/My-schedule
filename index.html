@@ -1703,6 +1703,62 @@ function updateNativeWidget(){
       color: t.color || '#6C7BFF'
     });
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
+  updateNativeCalendarWidget();
+  updateNativeNotesWidget();
+}
+
+// ---- 4x4 달력 위젯: 이번달 전체를 6주 x 7일(42칸)로 계산해서 전달 ----
+function computeCalendarWidgetCells(){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const first = new Date(y,m,1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const cells = [];
+  for(let i=0;i<42;i++){
+    const dayNum = i-startOffset+1;
+    if(dayNum<1 || dayNum>daysInMonth){
+      cells.push({day:'', color:'', today:false});
+      continue;
+    }
+    const date = new Date(y,m,dayNum);
+    const s = shiftForTeamOnDate(date, state.myTeamId);
+    cells.push({day:String(dayNum), color: s.color||'', today: sameDay(date, now)});
+  }
+  return {title: y+'년 '+(m+1)+'월', cells};
+}
+function updateNativeCalendarWidget(){
+  if(!CAP_NATIVE || !RingtonePickerPlugin) return;
+  try{
+    const {title, cells} = computeCalendarWidgetCells();
+    RingtonePickerPlugin.updateCalendarWidget({title, cells});
+  }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
+}
+
+// ---- 4x1 메모/일정 전용 위젯: 오늘 + 가장 가까운 다음 일정을 한 줄 요약으로 전달 ----
+function computeNotesWidgetText(){
+  const now = new Date();
+  const parts = [];
+  const todays = getNotesForDate(now);
+  if(todays.length){
+    const first = todays[0];
+    parts.push('오늘: '+(first.time?first.time+' ':'')+first.text+(todays.length>1?' 외 '+(todays.length-1)+'건':''));
+  }
+  for(let d=1; d<=14; d++){
+    const date = addDays(startOfDay(now), d);
+    const notes = getNotesForDate(date);
+    if(notes.length){
+      parts.push((date.getMonth()+1)+'/'+date.getDate()+': '+notes[0].text);
+      break;
+    }
+  }
+  return parts.length ? parts.join(' · ') : '등록된 일정이 없어요';
+}
+function updateNativeNotesWidget(){
+  if(!CAP_NATIVE || !RingtonePickerPlugin) return;
+  try{
+    RingtonePickerPlugin.updateNotesWidget({ text: computeNotesWidgetText() });
+  }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
 }
 
 const ALARM_ID_BASE = 100000;
@@ -2162,6 +2218,7 @@ function renderModalNotes(){
       renderModalNotes();
       renderCalendar();
       renderNowCard();
+      updateNativeWidget();
     };
     listEl.appendChild(row);
   });
@@ -2185,6 +2242,7 @@ function submitModalNote(){
   renderModalNotes();
   renderCalendar();
   renderNowCard();
+  updateNativeWidget();
   showToastMsg('일정이 저장되었습니다 ✓');
   textEl.focus();
 }

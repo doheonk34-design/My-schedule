@@ -44,6 +44,28 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/shift_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".ShiftCalendarWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/shift_calendar_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ShiftNotesWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/shift_notes_widget_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->
