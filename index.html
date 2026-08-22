@@ -862,6 +862,17 @@ function createTimePicker(initialValue, onChange){
     if(openTimePickerCloser) openTimePickerCloser();
     popover.style.display = 'flex';
     openTimePickerCloser = close;
+    // 팝오버가 화면(또는 모달) 오른쪽 밖으로 잘려나가지 않도록, 열릴 때 위치를 다시 계산해서 맞춤.
+    popover.style.left = '0px';
+    popover.style.right = 'auto';
+    requestAnimationFrame(()=>{
+      const rect = popover.getBoundingClientRect();
+      const overflowRight = rect.right - (window.innerWidth - 8);
+      if(overflowRight > 0){
+        popover.style.left = 'auto';
+        popover.style.right = '0px';
+      }
+    });
   }
   function commit(){
     const val = hourSel.value+':'+minSel.value;
