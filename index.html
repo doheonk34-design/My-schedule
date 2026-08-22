@@ -20,7 +20,6 @@
 <!-- 기기 간 동기화용 (설정 방법은 README/안내 참고) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg:#0E1116;
@@ -530,16 +529,6 @@
         </div>
 
         <div class="card card-collapsible collapsed">
-          <h3 class="card-toggle">📅 구글 캘린더 연동<span class="chevron">▾</span></h3>
-          <div class="card-body">
-            <p class="subtext" id="gcalStatusText">전달·이번달·다음달치 근무(주간/야간/대근 등)와 등록한 일정을 구글 캘린더에 자동으로 올려줘요 (휴무·비번은 제외). 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요. (아이폰/PC 웹 화면에서만 사용 가능해요)</p>
-            <button class="btn primary block" id="gcalConnectBtn">🔗 구글 캘린더 연동하기</button>
-            <button class="btn block" id="gcalSyncNowBtn" style="display:none;">🔄 지금 동기화</button>
-            <button class="btn block" id="gcalDisconnectBtn" style="display:none;">연동 해제</button>
-          </div>
-        </div>
-
-        <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">💾 데이터 백업<span class="chevron">▾</span></h3>
           <div class="card-body">
             <p class="subtext">휴대폰을 바꾸거나 초기화해도 이 파일 하나로 지금까지의 설정을 그대로 되살릴 수 있어요. 파일을 클라우드(구글드라이브 등)나 나에게 보내기로 보관해두세요.</p>
@@ -649,10 +638,18 @@
       <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
       <button class="btn primary block" id="shareCreateBtn">🔗 공유 링크 만들기</button>
       <div id="shareLinkBox" style="display:none;">
-        <label class="field">공유 링크</label>
+        <label class="field">공유 링크 (앱 화면으로 보기)</label>
         <div class="row">
           <input type="text" id="shareLinkInput" readonly>
           <button class="btn" id="shareCopyBtn">복사</button>
+        </div>
+        <div id="calSubLinkBox" style="display:none; margin-top:14px;">
+          <label class="field">구독 캘린더 링크 (구글/네이버/애플 캘린더에 등록)</label>
+          <p class="subtext" style="margin-top:0;">근무표(휴무·비번 제외)와 등록한 일정을 캘린더 앱에서 볼 수 있어요. 위 앱 공유 링크와 같은 코드를 쓰기 때문에, 링크를 새로 만들거나 끄면 이것도 같이 만료돼요.</p>
+          <div class="row">
+            <input type="text" id="calSubLinkInput" readonly>
+            <button class="btn" id="calSubCopyBtn">복사</button>
+          </div>
         </div>
         <div class="row" style="margin-top:10px;">
           <button class="btn" id="shareRegenBtn">🔄 새로 만들기</button>
@@ -807,7 +804,9 @@ const state = {
   overrides: {},            // { 'YYYY-MM-DD': { teamId: label } }
   notes: {},                // { 'YYYY-MM-DD': [ {id, time, text} ] }
   widgetSize: '4x1',        // '4x1' | '4x3' | '4x4'
-  editMode: false
+  editMode: false,
+  shareCode: null,          // 읽기전용 공유 코드 - localStorage 하나에만 의존하면 지워질 위험이 있어서 saveState/동기화로도 이중 보존
+  shareCodeHistory: []      // 예전에 만들었던 공유 코드들 (기기가 바뀌거나 저장공간이 지워져도, 새로 만들 때 예전 것까지 확실히 지우기 위해 기록해둠)
 };
 
 // ================= DATE HELPERS =================
@@ -1387,7 +1386,6 @@ function setStartDate(date, showToast){
   renderNowCard();
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   if(showToast) showToastMsg(`${date.getMonth()+1}월 ${date.getDate()}일을 ${team.name} 주간 첫날로 지정 — 전체 일정이 갱신되었습니다`);
 }
 
@@ -2003,14 +2001,12 @@ function openSettingsModal(){
   document.querySelectorAll('.card-collapsible').forEach(c=>c.classList.add('collapsed'));
   settingsModal.classList.add('show');
   renderPermissionStatus();
-  renderGcalStatus();
 }
 function closeSettingsModalKeep(){
   settingsSnapshot = null;
   settingsModal.classList.remove('show');
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg('설정이 저장되었습니다');
 }
 function closeSettingsModalCancel(){
@@ -2019,7 +2015,6 @@ function closeSettingsModalCancel(){
   settingsModal.classList.remove('show');
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg('변경사항이 취소되었습니다');
 }
 
@@ -2360,7 +2355,6 @@ function renderModalNotes(){
       renderCalendar();
       renderNowCard();
       updateNativeWidget();
-  syncToGoogleCalendar();
     };
     listEl.appendChild(row);
   });
@@ -2385,7 +2379,6 @@ function submitModalNote(){
   renderCalendar();
   renderNowCard();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg('일정이 저장되었습니다 ✓');
   textEl.focus();
 }
@@ -2401,7 +2394,6 @@ document.getElementById('modalSave').onclick = ()=>{
   editModal.classList.remove('show');
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg((modalDate.getMonth()+1)+'월 '+modalDate.getDate()+'일 근무가 저장되었습니다');
 };
 
@@ -2418,7 +2410,6 @@ document.getElementById('modalReset').onclick = ()=>{
   renderNowCard();
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg('해당 날짜가 자동 계산으로 되돌아갔습니다');
 };
 
@@ -2560,7 +2551,8 @@ function buildSyncPayload(){
   return {
     shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
     referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize
+    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize,
+    shareCode: state.shareCode, shareCodeHistory: state.shareCodeHistory
   };
 }
 
@@ -2575,13 +2567,19 @@ function applyRemoteState(data){
   state.overrides = data.overrides || {};
   state.notes = data.notes || {};
   state.widgetSize = data.widgetSize || state.widgetSize;
+  if(data.shareCode !== undefined) state.shareCode = data.shareCode;
+  if(Array.isArray(data.shareCodeHistory)){
+    const merged = new Set([...(state.shareCodeHistory||[]), ...data.shareCodeHistory]);
+    state.shareCodeHistory = [...merged];
+  }
+  shareCode = state.shareCode; // 이 기기의 진행 중인 변수도 최신 값으로 맞춤
   ensureTimeDefaults();
   renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
   renderCalendar(); renderNowCard(); updateMyTeamHint();
+  renderShareStatus();
   saveState();
   rescheduleLocalAlarms();
   updateNativeWidget();
-  syncToGoogleCalendar();
   showToastMsg('다른 기기의 변경사항을 받아왔어요 🔄');
 }
 
@@ -2650,298 +2648,12 @@ document.getElementById('syncStopBtn').onclick = async ()=>{
 
 // (동기화 자동 재연결은 하단 INIT 섹션에서 loadState() 이후에 실행됩니다)
 
-// ================= 구글 캘린더 연동 (아이폰/PC 웹 화면 전용) =================
-// 여러 요청을 한 번에 몇 개씩 동시에 처리 (하나씩 순서대로 하면 90개 넘는 요청에 시간이 너무 오래 걸려서,
-// 그 사이에 사파리가 백그라운드에서 실행을 멈춰버려 중간까지만 반영되는 문제가 있었음)
-async function runWithConcurrency(items, worker, concurrency){
-  concurrency = concurrency || 6;
-  let i = 0;
-  async function runNext(){
-    while(i < items.length){
-      const idx = i++;
-      try{ await worker(items[idx], idx); }catch(e){}
-    }
-  }
-  const workers = [];
-  for(let w=0; w<Math.min(concurrency, items.length); w++) workers.push(runNext());
-  await Promise.all(workers);
-}
-
-const GOOGLE_CLIENT_ID = '781370742400-2v7696coka4ffl9r8j7g9v15b1im6n6g.apps.googleusercontent.com';
-let gisTokenClient = null;
-let googleAccessToken = null;
-let googleTokenExpiresAt = 0;
-
-function gcalAvailable(){
-  // 안드로이드 웹뷰(APK) 안에서는 구글이 보안상 로그인 팝업을 막아버려서 아예 지원 안 함.
-  return !CAP_NATIVE && typeof google !== 'undefined' && !!google.accounts;
-}
-
-function isGoogleTokenValid(){
-  return !!googleAccessToken && Date.now() < googleTokenExpiresAt - 30000;
-}
-
-function initGisClient(){
-  if(gisTokenClient || typeof google === 'undefined' || !google.accounts) return;
-  gisTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    callback: (resp)=>{
-      if(resp && resp.error){ showToastMsg('구글 연동에 실패했어요'); return; }
-      googleAccessToken = resp.access_token;
-      googleTokenExpiresAt = Date.now() + (resp.expires_in*1000);
-      localStorage.setItem('gcalConnected', '1');
-      renderGcalStatus();
-      showToastMsg('구글 캘린더 연동됐어요 ✓');
-      syncToGoogleCalendar();
-    }
-  });
-}
-
-function renderGcalStatus(){
-  const statusEl = document.getElementById('gcalStatusText');
-  const connectBtn = document.getElementById('gcalConnectBtn');
-  const syncBtn = document.getElementById('gcalSyncNowBtn');
-  const disconnectBtn = document.getElementById('gcalDisconnectBtn');
-
-  if(!gcalAvailable()){
-    statusEl.textContent = '이 기능은 아이폰/PC의 웹 브라우저 화면에서만 사용할 수 있어요 (설치된 안드로이드 앱에서는 구글 로그인이 막혀있어요).';
-    connectBtn.style.display = 'none';
-    syncBtn.style.display = 'none';
-    disconnectBtn.style.display = 'none';
-    return;
-  }
-
-  const connected = !!localStorage.getItem('gcalConnected');
-  if(connected){
-    statusEl.textContent = '🟢 연동됨 — 근무표/일정이 자동으로 구글 캘린더에 올라가요.';
-    connectBtn.style.display = 'none';
-    syncBtn.style.display = 'block';
-    disconnectBtn.style.display = 'block';
-  } else {
-    statusEl.textContent = '전달·이번달·다음달치 근무(주간/야간/대근 등)와 등록한 일정을 구글 캘린더에 자동으로 올려줘요 (휴무·비번은 제외). 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요.';
-    connectBtn.style.display = 'block';
-    syncBtn.style.display = 'none';
-    disconnectBtn.style.display = 'none';
-  }
-}
-
-document.getElementById('gcalConnectBtn').onclick = ()=>{
-  if(!gcalAvailable()){ showToastMsg('이 기능은 아이폰/PC 웹 화면에서만 사용할 수 있어요'); return; }
-  initGisClient();
-  if(!gisTokenClient){ showToastMsg('구글 로그인 준비 중이에요, 잠시 후 다시 시도해주세요'); return; }
-  gisTokenClient.requestAccessToken({ prompt: 'consent' });
-};
-document.getElementById('gcalSyncNowBtn').onclick = ()=>{
-  showToastMsg('구글 캘린더 동기화 중...');
-  syncToGoogleCalendar();
-};
-document.getElementById('gcalDisconnectBtn').onclick = async ()=>{
-  const ok = await showConfirm('연동을 해제하면 구글 캘린더에 올라간 근무표 일정도 같이 지워져요.\n계속할까요?');
-  if(!ok) return;
-
-  showToastMsg('구글 캘린더에서 일정 지우는 중...');
-  const result = await removeAllGcalEvents();
-
-  if(!result.ok){
-    const retry = await showConfirm(
-      '구글 캘린더에서 일정을 지우지 못했어요 (로그인이 만료됐을 수 있어요).\n' +
-      '사파리(홈 화면 아이콘 말고)로 이 화면을 열고 다시 시도하시면 지울 수 있어요.\n\n' +
-      '그래도 지금 연동만 먼저 끊을까요? (구글 캘린더에는 일정이 남아있게 돼요, 나중에 직접 지우시거나 다시 연동해서 지워야 해요)'
-    );
-    if(!retry){
-      showToastMsg('연동을 유지했어요. 사파리에서 다시 시도해주세요');
-      return; // 연동 상태 그대로 둠 - 나중에 다시 시도 가능하도록
-    }
-  } else if((result.deletedCount||0) > 0){
-    showToastMsg(`구글 캘린더에서 ${result.deletedCount}개 일정을 지웠어요`);
-  }
-
-  if(googleAccessToken && typeof google !== 'undefined' && google.accounts?.oauth2?.revoke){
-    try{ google.accounts.oauth2.revoke(googleAccessToken, ()=>{}); }catch(e){}
-  }
-  googleAccessToken = null;
-  googleTokenExpiresAt = 0;
-  localStorage.removeItem('gcalConnected');
-  renderGcalStatus();
-  showToastMsg('구글 캘린더 연동을 해제했어요');
-};
-
-async function ensureGoogleToken(){
-  if(isGoogleTokenValid()) return true;
-  if(!localStorage.getItem('gcalConnected')) return false; // 연동한 적 없으면 조용히 스킵
-  if(!gcalAvailable()) return false;
-  initGisClient();
-  if(!gisTokenClient) return false;
-  return new Promise((resolve)=>{
-    const originalCallback = gisTokenClient.callback;
-    gisTokenClient.callback = (resp)=>{
-      gisTokenClient.callback = originalCallback;
-      if(resp && resp.error){ resolve(false); return; }
-      googleAccessToken = resp.access_token;
-      googleTokenExpiresAt = Date.now() + (resp.expires_in*1000);
-      resolve(true);
-    };
-    try{ gisTokenClient.requestAccessToken({ prompt: '' }); } // 조용히(팝업 최소화) 토큰 갱신 시도
-    catch(e){ resolve(false); }
-  });
-}
-
-async function deleteAllGcalMarkedEvents(timeMin, timeMax){
-  let pageToken = '';
-  let deletedCount = 0;
-  let hadListError = false;
-  do{
-    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=shiftnote=1&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250${pageToken?'&pageToken='+encodeURIComponent(pageToken):''}`;
-    const res = await fetch(listUrl, { headers: { Authorization: 'Bearer '+googleAccessToken } });
-    if(!res.ok){ hadListError = true; break; }
-    const data = await res.json();
-    await runWithConcurrency(data.items||[], async (ev)=>{
-      const delRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.id}`, {
-        method:'DELETE', headers:{ Authorization:'Bearer '+googleAccessToken }
-      }).catch(()=>null);
-      if(delRes && (delRes.ok || delRes.status===410)) deletedCount++; // 410=이미 지워진 이벤트, 이것도 성공으로 침
-    });
-    pageToken = data.nextPageToken || '';
-  } while(pageToken);
-  return { ok: !hadListError, deletedCount };
-}
-
-async function removeAllGcalEvents(){
-  const ok = await ensureGoogleToken();
-  if(!ok) return { ok:false, reason:'no-token' };
-  try{
-    const now = new Date();
-    const rangeStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
-    const rangeEnd = new Date(now.getFullYear(), now.getMonth()+2, 0);
-    const timeMin = rangeStart.toISOString();
-    const timeMax = addDays(rangeEnd, 1).toISOString();
-    const result = await deleteAllGcalMarkedEvents(timeMin, timeMax);
-    return { ok: result.ok, deletedCount: result.deletedCount };
-  }catch(e){ return { ok:false, reason:'exception' }; }
-}
-
-let gcalSyncing = false;
-let gcalSyncQueued = false;
-async function syncToGoogleCalendar(){
-  if(!gcalAvailable()) return;
-  if(gcalSyncing){ gcalSyncQueued = true; return; } // 이미 동기화 중이면 겹쳐 돌리지 않고, 끝나면 한 번 더 돌리도록 예약만 해둠
-  gcalSyncing = true;
-  try{
-    await syncToGoogleCalendarInner();
-  } finally {
-    gcalSyncing = false;
-    if(gcalSyncQueued){
-      gcalSyncQueued = false;
-      syncToGoogleCalendar();
-    }
-  }
-}
-async function syncToGoogleCalendarInner(){
-  const ok = await ensureGoogleToken();
-  if(!ok) return;
-
-  try{
-    const now = new Date();
-    // 위젯/캘린더 앱에서 전달·익달로 넘겨봐도 근무표가 보이도록, 전달 1일 ~ 익달 말일까지 동기화
-    const rangeStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
-    const rangeEnd = new Date(now.getFullYear(), now.getMonth()+2, 0); // 익달의 마지막 날
-    const totalDays = Math.round((rangeEnd - rangeStart)/86400000) + 1;
-    const timeMin = rangeStart.toISOString();
-    const timeMax = addDays(rangeEnd, 1).toISOString(); // exclusive 상한이라 하루 더해줌
-
-    // 1. 우리 앱이 예전에 만들어둔 이벤트 찾아서 삭제 (근무표 바뀌면 옛날 걸로 안 남게)
-    await deleteAllGcalMarkedEvents(timeMin, timeMax);
-
-    // 2. 새 이벤트 만들기 (근무표 + 메모)
-    const events = [];
-    for(let d=0; d<totalDays; d++){
-      const date = addDays(rangeStart, d);
-      const dateStr = isoDate(date);
-      const mine = shiftForTeamOnDate(date, state.myTeamId);
-      const matched = state.shiftTypes.find(st=>st.name===mine.label);
-
-      if(matched && matched.role!=='off' && matched.role!=='standby'){
-        const times = state.shiftTimes[matched.id];
-        const alarm = state.alarms[matched.id];
-        let ev;
-        if(times && times.start && times.end){
-          const [sh,sm] = times.start.split(':').map(Number);
-          const [eh,em] = times.end.split(':').map(Number);
-          const startDt = new Date(date); startDt.setHours(sh,sm,0,0);
-          let endDt = new Date(date); endDt.setHours(eh,em,0,0);
-          if(endDt <= startDt) endDt = addDays(endDt, 1); // 야간처럼 다음날로 넘어가는 근무
-          ev = {
-            summary: mine.label+' 근무',
-            start: { dateTime: startDt.toISOString() },
-            end: { dateTime: endDt.toISOString() },
-            extendedProperties: { private: { shiftnote: '1' } },
-            reminders: { useDefault:false, overrides:[] }
-          };
-          if(alarm && alarm.enabled && alarm.time){
-            const [ah,am] = alarm.time.split(':').map(Number);
-            const alarmDt = new Date(date); alarmDt.setHours(ah,am,0,0);
-            let diffMin = Math.round((startDt - alarmDt)/60000);
-            if(diffMin < 0) diffMin = 0;
-            ev.reminders.overrides.push({ method:'popup', minutes: diffMin });
-          }
-        } else {
-          ev = {
-            summary: mine.label,
-            start: { date: dateStr },
-            end: { date: isoDate(addDays(date,1)) },
-            extendedProperties: { private: { shiftnote: '1' } },
-            reminders: { useDefault:false, overrides:[] }
-          };
-        }
-        events.push(ev);
-      }
-
-      getNotesForDate(date).forEach(n=>{
-        let ev;
-        if(n.time){
-          const [nh,nm] = n.time.split(':').map(Number);
-          const startDt = new Date(date); startDt.setHours(nh,nm,0,0);
-          const endDt = new Date(startDt.getTime()+30*60000);
-          ev = {
-            summary: n.text,
-            start: { dateTime: startDt.toISOString() },
-            end: { dateTime: endDt.toISOString() },
-            extendedProperties: { private: { shiftnote: '1' } },
-            reminders: { useDefault:false, overrides:[{method:'popup', minutes:10}] }
-          };
-        } else {
-          ev = {
-            summary: n.text,
-            start: { date: dateStr },
-            end: { date: isoDate(addDays(date,1)) },
-            extendedProperties: { private: { shiftnote: '1' } },
-            reminders: { useDefault:false, overrides:[] }
-          };
-        }
-        events.push(ev);
-      });
-    }
-
-    let insertedCount = 0;
-    await runWithConcurrency(events, async (ev)=>{
-      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-        method:'POST',
-        headers:{ Authorization:'Bearer '+googleAccessToken, 'Content-Type':'application/json' },
-        body: JSON.stringify(ev)
-      }).catch(()=>null);
-      if(res && res.ok) insertedCount++;
-    });
-
-    showToastMsg(`구글 캘린더에 동기화됐어요 📅 (${insertedCount}건)`);
-  }catch(e){ /* 토큰 만료 등으로 실패하면 조용히 넘어감 - 다음 동기화 때 다시 시도됨 */ }
-}
-
-// ================= 읽기전용 공유 링크 =================
+// ================= 읽기전용 공유 링크 (+ 구독 캘린더 링크) =================
 const urlParams = new URLSearchParams(location.search);
 const VIEW_SHARE_CODE = urlParams.get('view');
+const CALENDAR_WORKER_ORIGIN = 'https://proud-sun-54e5.doheonk34.workers.dev';
 
-let shareCode = localStorage.getItem('shiftNoteShareCode') || null;
+let shareCode = null; // 실제 값은 INIT에서 loadState() 이후 state.shareCode 기준으로 채워짐
 
 function renderShareStatus(){
   const statusEl = document.getElementById('shareStatusText');
@@ -2950,11 +2662,19 @@ function renderShareStatus(){
   if(shareCode){
     const link = location.origin + location.pathname + '?view=' + shareCode;
     document.getElementById('shareLinkInput').value = link;
+    const calBox = document.getElementById('calSubLinkBox');
+    if(calBox){
+      const calLink = CALENDAR_WORKER_ORIGIN + '/' + shareCode + '/calendar.ics';
+      document.getElementById('calSubLinkInput').value = calLink;
+      calBox.style.display = 'block';
+    }
     linkBox.style.display = 'block';
     createBtn.style.display = 'none';
     statusEl.textContent = '공유 중이에요. 아래 링크를 받은 사람은 실시간으로 내 근무표를 볼 수 있어요 (수정은 못함).';
   } else {
     linkBox.style.display = 'none';
+    const calBox = document.getElementById('calSubLinkBox');
+    if(calBox) calBox.style.display = 'none';
     createBtn.style.display = 'block';
     statusEl.textContent = '가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.';
   }
@@ -2972,10 +2692,31 @@ function pushStateToShare(){
   }).catch(()=>{});
 }
 
+// 지금까지 만들었던 공유 코드들(현재+히스토리)을 전부 지워서, 어디서 만들어졌든 예전 링크가 절대 안 살아남게 함
+async function deleteAllKnownShareCodes(){
+  if(!ensureFirebaseInit()) return;
+  const codes = new Set(state.shareCodeHistory || []);
+  if(shareCode) codes.add(shareCode);
+  await Promise.all([...codes].map(code =>
+    syncDb.collection('shiftNoteShare').doc(code).delete().catch(()=>{})
+  ));
+}
+
+function setShareCode(newCode){
+  if(shareCode){
+    if(!state.shareCodeHistory) state.shareCodeHistory = [];
+    if(!state.shareCodeHistory.includes(shareCode)) state.shareCodeHistory.push(shareCode);
+    // 히스토리가 너무 길어지지 않도록 최근 20개만 유지
+    if(state.shareCodeHistory.length > 20) state.shareCodeHistory = state.shareCodeHistory.slice(-20);
+  }
+  shareCode = newCode;
+  state.shareCode = newCode;
+  saveState();
+}
+
 document.getElementById('shareCreateBtn').onclick = ()=>{
   if(!ensureFirebaseInit()){ showToastMsg('동기화 기능이 아직 설정되지 않았어요'); return; }
-  shareCode = generateSyncCode();
-  localStorage.setItem('shiftNoteShareCode', shareCode);
+  setShareCode(generateSyncCode());
   renderShareStatus();
   pushStateToShare();
   showToastMsg('공유 링크가 만들어졌어요');
@@ -2985,25 +2726,48 @@ document.getElementById('shareCopyBtn').onclick = async ()=>{
   try{ await navigator.clipboard.writeText(val); showToastMsg('링크를 복사했어요'); }
   catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
 };
+const calCopyBtn = document.getElementById('calSubCopyBtn');
+if(calCopyBtn) calCopyBtn.onclick = async ()=>{
+  const val = document.getElementById('calSubLinkInput').value;
+  try{ await navigator.clipboard.writeText(val); showToastMsg('구독 캘린더 주소를 복사했어요'); }
+  catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
+};
 document.getElementById('shareRegenBtn').onclick = async ()=>{
-  const ok = await showConfirm('새 링크를 만들면 예전에 공유했던 링크는 더 이상 작동하지 않아요.\n계속할까요?');
+  const ok = await showConfirm('새 링크를 만들면 예전에 공유했던 링크(구독 캘린더 포함)는 모두 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
-  if(shareCode && ensureFirebaseInit()) syncDb.collection('shiftNoteShare').doc(shareCode).delete().catch(()=>{});
-  shareCode = generateSyncCode();
-  localStorage.setItem('shiftNoteShareCode', shareCode);
+  showToastMsg('예전 링크들을 정리하는 중...');
+  await deleteAllKnownShareCodes(); // 이 기기가 알고 있는 모든 예전 코드를 먼저 확실히 지움
+  setShareCode(generateSyncCode());
   renderShareStatus();
   pushStateToShare();
-  showToastMsg('새 공유 링크를 만들었어요');
+  showToastMsg('새 공유 링크를 만들었어요 (예전 링크는 모두 만료됐어요)');
 };
 document.getElementById('shareOffBtn').onclick = async ()=>{
-  const ok = await showConfirm('공유를 끄면 그 링크는 더 이상 작동하지 않아요.\n계속할까요?');
+  const ok = await showConfirm('공유를 끄면 지금까지 만들었던 모든 링크(구독 캘린더 포함)가 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
-  if(shareCode && ensureFirebaseInit()) syncDb.collection('shiftNoteShare').doc(shareCode).delete().catch(()=>{});
-  shareCode = null;
-  localStorage.removeItem('shiftNoteShareCode');
+  showToastMsg('링크들을 정리하는 중...');
+  await deleteAllKnownShareCodes();
+  setShareCode(null);
   renderShareStatus();
   showToastMsg('공유를 껐어요');
 };
+
+// 같은 브라우저에서 이 앱을 여러 탭/창으로 열어놨을 때: 한쪽에서 공유를 끄거나 새로 만들어도
+// 다른 탭은 그 사실을 모른 채 계속 예전 shareCode로 자동저장(4초 간격)을 밀어넣어서
+// 방금 지운 공유 문서를 도로 살려내는 문제가 있었음. storage 이벤트로 다른 탭의 변경을 즉시 감지해서 따라감.
+window.addEventListener('storage', (e)=>{
+  if(e.key !== STORAGE_KEY || !e.newValue) return;
+  try{
+    const data = JSON.parse(e.newValue);
+    if(data.shareCode !== undefined && data.shareCode !== state.shareCode){
+      state.shareCode = data.shareCode;
+      shareCode = data.shareCode;
+      lastSharedPayloadJSON = null; // 코드가 바뀌었으니 다음 저장 때 새 코드 기준으로 다시 올리게 함
+      renderShareStatus();
+    }
+    if(Array.isArray(data.shareCodeHistory)) state.shareCodeHistory = data.shareCodeHistory;
+  }catch(e){ /* 무시 */ }
+});
 
 // ================= DRAG PIN =================
 const pin = document.getElementById('startPin');
@@ -3117,7 +2881,9 @@ function saveState(){
       alarms: state.alarms,
       overrides: state.overrides,
       notes: state.notes,
-      widgetSize: state.widgetSize
+      widgetSize: state.widgetSize,
+      shareCode: state.shareCode,
+      shareCodeHistory: state.shareCodeHistory
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }catch(e){ /* 저장 불가(사파리 프라이빗 모드 등) 시 조용히 무시 */ }
@@ -3138,6 +2904,16 @@ function loadState(){
     state.overrides = data.overrides || {};
     state.notes = data.notes || {};
     state.widgetSize = data.widgetSize || '4x1';
+    state.shareCode = data.shareCode !== undefined ? data.shareCode : null;
+    state.shareCodeHistory = Array.isArray(data.shareCodeHistory) ? data.shareCodeHistory : [];
+    // 예전 버전에서 공유 코드를 별도 localStorage 키에만 저장했던 경우, 이번에 메인 저장소로 옮겨옴
+    if(!state.shareCode){
+      const legacyCode = localStorage.getItem('shiftNoteShareCode');
+      if(legacyCode){
+        state.shareCode = legacyCode;
+        if(!state.shareCodeHistory.includes(legacyCode)) state.shareCodeHistory.push(legacyCode);
+      }
+    }
     return true;
   }catch(e){ return false; }
 }
@@ -3171,6 +2947,7 @@ if(VIEW_SHARE_CODE){
 } else {
   // ---- 일반(소유자) 모드 ----
   loadState();
+  shareCode = state.shareCode; // localStorage/동기화로 불러온 값을 이 세션의 진행 변수에 반영
   stateReady = true; // 여기서부터는 저장/전송해도 안전함 (그 전엔 절대 안 함)
   ensureTimeDefaults();
   renderShiftTypeRows();
@@ -3196,7 +2973,6 @@ if(VIEW_SHARE_CODE){
     setTimeout(runOnboardingFlow, 1200); // 알림 권한 요청 팝업과 겹치지 않게 살짝 뒤에 시작
   });
   updateNativeWidget();
-  syncToGoogleCalendar();
 }
 
 // ================= PWA: SERVICE WORKER 등록 =================
