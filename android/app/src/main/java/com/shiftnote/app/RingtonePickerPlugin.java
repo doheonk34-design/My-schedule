@@ -10,6 +10,8 @@ import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -163,21 +165,81 @@ public class RingtonePickerPlugin extends Plugin {
     }
 
     /**
-     * 4x1 메모/일정 전용 위젯 갱신 - JS에서 이미 보기 좋게 만든 요약 문자열 하나를 그대로 받아 표시.
+     * 기본 제공 알람음 5종의 알림 채널을 "진짜 알람"처럼 동작하도록 직접 만든다.
+     * (Capacitor의 기본 createChannel()로 만들면 일반 알림 오디오 스트림을 타서
+     *  무음모드/알림 음량에 영향을 받아 화면 잠금 중엔 소리가 안 날 수 있었음.
+     *  여기서는 시계 알람과 같은 USAGE_ALARM 오디오 스트림을 명시적으로 지정한다.)
      */
     @PluginMethod
-    public void updateNotesWidget(PluginCall call) {
-        String today = call.getString("today", "일정 없음");
-        String upcoming = call.getString("upcoming", "일정 없음");
+    public void setupPresetAlarmChannels(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Context context = getContext();
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
+            String[] presetIds = {"classic", "chime", "digital", "gentle", "radar"};
+            String[] presetNames = {"클래식벨", "차임벨", "디지털", "잔잔한알림", "레이더"};
+
+            for (int i = 0; i < presetIds.length; i++) {
+                String channelId = "alarm_" + presetIds[i];
+                String channelName = "교대노트 알람 · " + presetNames[i];
+                String resName = "alarm_" + presetIds[i];
+
+                NotificationChannel existing = manager.getNotificationChannel(channelId);
+                if (existing != null) {
+                    manager.deleteNotificationChannel(channelId);
+                }
+
+                NotificationChannel channel = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
+                channel.enableVibration(true);
+                channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+
+                AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .build();
+
+                int resId = context.getResources().getIdentifier(resName, "raw", context.getPackageName());
+                if (resId != 0) {
+                    Uri soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + resId);
+                    channel.setSound(soundUri, audioAttributes);
+                }
+
+                manager.createNotificationChannel(channel);
+            }
+        }
+        call.resolve();
+    }
+
+    /**
+     * 이 앱이 배터리 최적화(절전) 제외 목록에 있는지 확인.
+     * 최적화 대상에 포함돼있으면(=제외 안 돼있으면) 시스템이 백그라운드에서 앱을 재워서
+     * 예약해둔 알람이 늦게 울리거나 아예 안 울릴 수 있음.
+     */
+    @PluginMethod
+    public void checkBatteryOptimization(PluginCall call) {
         Context context = getContext();
-        SharedPreferences prefs = context.getSharedPreferences(ShiftNotesWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit()
-            .putString(ShiftNotesWidgetProvider.PREF_TODAY, today)
-            .putString(ShiftNotesWidgetProvider.PREF_UPCOMING, upcoming)
-            .apply();
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
+        JSObject ret = new JSObject();
+        ret.put("ignoring", ignoring);
+        call.resolve(ret);
+    }
 
-        ShiftNotesWidgetProvider.updateAll(context);
+    /**
+     * 배터리 최적화 제외 요청 화면을 띄운다 (시스템 팝업으로 바로 뜨는 기기도 있고,
+     * 설정 화면으로 넘어가는 기기도 있음 - 제조사마다 다름).
+     */
+    @PluginMethod
+    public void requestIgnoreBatteryOptimization(PluginCall call) {
+        Context context = getContext();
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + context.getPackageName()));
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch (Exception e) {
+            // 일부 기기/OS 버전은 이 인텐트를 지원하지 않을 수 있음 - 조용히 무시
+        }
         call.resolve();
     }
 }

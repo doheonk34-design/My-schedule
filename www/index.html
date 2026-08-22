@@ -651,6 +651,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="onboardStepModal" style="z-index:4000;">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-header">
+      <span id="onboardStepTitle">⏰ 정확한 알람 권한 필요</span>
+    </div>
+    <p class="subtext" id="onboardStepDesc" style="margin-top:0;"></p>
+    <button class="btn primary block" id="onboardStepGoBtn">지금 허용하러 가기</button>
+    <button class="btn block" id="onboardStepLaterBtn">나중에</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="notesViewModal">
   <div class="modal-box" style="max-width:320px;">
     <div class="modal-header">
@@ -1517,6 +1528,91 @@ async function renderPermissionStatus(){
   };
 }
 
+// ================= 앱 실행시 필요한 설정을 순서대로 하나씩 확인/안내하는 온보딩 =================
+const ONBOARD_STEPS = [
+  {
+    id: 'notif',
+    title: '🔔 알림 권한 필요',
+    desc: '근무 알람과 알림을 보내려면 먼저 알림 권한을 허용해주셔야 해요.',
+    check: async ()=>{
+      if(!LocalNotificationsPlugin) return true;
+      try{ const p = await LocalNotificationsPlugin.checkPermissions(); return p.display==='granted'; }
+      catch(e){ return true; }
+    },
+    action: async ()=>{
+      if(!LocalNotificationsPlugin) return;
+      try{ await LocalNotificationsPlugin.requestPermissions(); }catch(e){}
+    }
+  },
+  {
+    id: 'exact',
+    title: '⏰ 정확한 알람 권한 필요',
+    desc: '이 권한이 꺼져있으면 화면이 꺼진 동안 알람이 정확한 시각에 안 울리고 늦게(폰을 켤 때) 몰아서 울릴 수 있어요.',
+    check: async ()=>{
+      if(!LocalNotificationsPlugin) return true;
+      try{ const e2 = await LocalNotificationsPlugin.checkExactNotificationSetting(); return e2.exact_alarm==='granted'; }
+      catch(e){ return true; }
+    },
+    action: async ()=>{
+      if(!LocalNotificationsPlugin) return;
+      try{ await LocalNotificationsPlugin.changeExactNotificationSetting(); }catch(e){}
+    }
+  },
+  {
+    id: 'battery',
+    title: '🔋 배터리 최적화 제외 필요',
+    desc: '배터리 절약 기능이 앱을 강제로 재우면 알람이 안 울릴 수 있어요. "제한 없음"으로 설정해주세요.',
+    check: async ()=>{
+      if(!RingtonePickerPlugin) return true;
+      try{ const b = await RingtonePickerPlugin.checkBatteryOptimization(); return !!b.ignoring; }
+      catch(e){ return true; }
+    },
+    action: async ()=>{
+      if(!RingtonePickerPlugin) return;
+      try{ await RingtonePickerPlugin.requestIgnoreBatteryOptimization(); }catch(e){}
+    }
+  }
+];
+let currentOnboardStep = null;
+let onboardSkippedThisSession = false;
+
+async function runOnboardingFlow(){
+  if(!CAP_NATIVE || onboardSkippedThisSession) return;
+  for(const step of ONBOARD_STEPS){
+    let granted = true;
+    try{ granted = await step.check(); }catch(e){ granted = true; }
+    if(!granted){
+      showOnboardStep(step);
+      return; // 한 번에 하나만 보여줌 - 이게 해결되면 앱으로 돌아왔을 때 다음 걸 이어서 보여줌
+    }
+  }
+  currentOnboardStep = null; // 전부 통과됨
+}
+
+function showOnboardStep(step){
+  currentOnboardStep = step;
+  document.getElementById('onboardStepTitle').textContent = step.title;
+  document.getElementById('onboardStepDesc').textContent = step.desc;
+  document.getElementById('onboardStepModal').classList.add('show');
+}
+
+document.getElementById('onboardStepGoBtn').onclick = async ()=>{
+  const step = currentOnboardStep;
+  document.getElementById('onboardStepModal').classList.remove('show');
+  if(step) { try{ await step.action(); }catch(e){} }
+  // 설정 화면(또는 시스템 권한 팝업)에서 돌아오면 visibilitychange 리스너가 다음 단계를 이어서 진행함
+};
+document.getElementById('onboardStepLaterBtn').onclick = ()=>{
+  document.getElementById('onboardStepModal').classList.remove('show');
+  currentOnboardStep = null;
+  onboardSkippedThisSession = true; // 이번에 앱 켜있는 동안은 더 안 물어봄 (다음 실행 때 다시 확인)
+};
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && currentOnboardStep){
+    setTimeout(runOnboardingFlow, 500); // 설정 화면 갔다가 돌아온 것으로 보고, 다음 단계 확인
+  }
+});
+
 function renderAlarmList(){
   const el = document.getElementById('alarmList');
   el.innerHTML='';
@@ -1654,17 +1750,10 @@ async function setupNotificationChannels(){
     const perm = await LocalNotificationsPlugin.requestPermissions();
     if(perm.display !== 'granted') return;
   }catch(e){ return; }
-  for(const s of ALARM_SOUNDS){
-    try{
-      await LocalNotificationsPlugin.createChannel({
-        id: 'alarm_'+s.id,
-        name: '교대노트 알람 · '+s.name,
-        sound: 'alarm_'+s.id+'.wav',
-        importance: 5,
-        visibility: 1,
-        vibration: true
-      });
-    }catch(e){}
+  // Capacitor 기본 createChannel()은 일반 알림 오디오 스트림을 타서 무음모드/알림음량에 영향을 받음.
+  // 진짜 시계 알람처럼 동작하도록(무음모드에서도 울리게) 네이티브에서 직접 USAGE_ALARM 채널을 만든다.
+  if(RingtonePickerPlugin){
+    try{ await RingtonePickerPlugin.setupPresetAlarmChannels(); }catch(e){}
   }
   // 이미 커스텀(내 폰 소리) 알림음이 설정된 근무유형이 있다면, 그 채널도 다시 만들어둠
   // (다른 기기에서 동기화로 넘어왔거나, 채널이 지워진 경우를 대비)
@@ -2772,7 +2861,10 @@ if(VIEW_SHARE_CODE){
   window.addEventListener('beforeunload', saveAll);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
 
-  setupNotificationChannels().then(()=> rescheduleLocalAlarms());
+  setupNotificationChannels().then(()=> {
+    rescheduleLocalAlarms();
+    setTimeout(runOnboardingFlow, 1200); // 알림 권한 요청 팝업과 겹치지 않게 살짝 뒤에 시작
+  });
   updateNativeWidget();
 }
 
