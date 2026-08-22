@@ -176,7 +176,7 @@
   .tp-trigger.placeholder{color:var(--sub);}
   .tp-trigger:hover{border-color:#4A5568;}
   .tp-popover{
-    position:absolute; z-index:200; top:calc(100% + 4px); left:0;
+    position:absolute; z-index:3000; top:calc(100% + 4px); left:0;
     background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px;
     display:flex; align-items:center; gap:6px; box-shadow:0 12px 28px rgba(0,0,0,.5);
   }
@@ -860,18 +860,29 @@ function createTimePicker(initialValue, onChange){
   }
   function open(){
     if(openTimePickerCloser) openTimePickerCloser();
-    popover.style.display = 'flex';
-    openTimePickerCloser = close;
-    // 팝오버가 화면(또는 모달) 오른쪽 밖으로 잘려나가지 않도록, 열릴 때 위치를 다시 계산해서 맞춤.
+    // 설정 화면의 스크롤 영역(overflow-y:auto)은 가로 넘침도 같이 잘라버리는 CSS 특성이 있어서,
+    // 팝오버를 그 안에 그대로 두면 화면 위치를 아무리 계산해도 잘려나감.
+    // 그래서 열 때 body 바로 아래로 옮기고 position:fixed로 화면 좌표를 직접 계산해서 배치한다.
+    document.body.appendChild(popover);
+    popover.style.position = 'fixed';
+    popover.style.top = '-9999px';
     popover.style.left = '0px';
     popover.style.right = 'auto';
+    popover.style.display = 'flex';
+    openTimePickerCloser = close;
+
     requestAnimationFrame(()=>{
-      const rect = popover.getBoundingClientRect();
-      const overflowRight = rect.right - (window.innerWidth - 8);
-      if(overflowRight > 0){
-        popover.style.left = 'auto';
-        popover.style.right = '0px';
-      }
+      const triggerRect = trigger.getBoundingClientRect();
+      const pw = popover.offsetWidth;
+      const ph = popover.offsetHeight;
+      let left = triggerRect.left;
+      if(left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
+      if(left < 8) left = 8;
+      let top = triggerRect.bottom + 4;
+      if(top + ph > window.innerHeight - 8) top = triggerRect.top - ph - 4;
+      if(top < 8) top = 8;
+      popover.style.left = left + 'px';
+      popover.style.top = top + 'px';
     });
   }
   function commit(){
