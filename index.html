@@ -644,6 +644,7 @@
     <div class="share-tabs">
       <button class="share-tab active" id="shareTabPhotoBtn">🖼️ 사진으로 공유</button>
       <button class="share-tab" id="shareTabLinkBtn">🔗 링크로 공유</button>
+      <button class="share-tab" id="shareTabCalBtn">📅 캘린더 구독</button>
     </div>
 
     <div class="share-tab-panel" id="shareTabPhoto">
@@ -660,25 +661,33 @@
     </div>
 
     <div class="share-tab-panel" id="shareTabLink" style="display:none;">
-      <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
+      <p class="subtext" id="shareStatusText">가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 개인 메모/일정은 안 보이고, 근무표만 보여요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.</p>
       <button class="btn primary block" id="shareCreateBtn">🔗 공유 링크 만들기</button>
       <div id="shareLinkBox" style="display:none;">
-        <label class="field">공유 링크 (앱 화면으로 보기)</label>
+        <label class="field">공유 링크 (근무표만 보임)</label>
         <div class="row">
           <input type="text" id="shareLinkInput" readonly>
           <button class="btn" id="shareCopyBtn">복사</button>
         </div>
-        <div id="calSubLinkBox" style="display:none; margin-top:14px;">
-          <label class="field">구독 캘린더 링크 (구글/네이버/애플 캘린더에 등록)</label>
-          <p class="subtext" style="margin-top:0;">근무표(휴무·비번 제외)와 등록한 일정을 캘린더 앱에서 볼 수 있어요. 위 앱 공유 링크와 같은 코드를 쓰기 때문에, 링크를 새로 만들거나 끄면 이것도 같이 만료돼요.</p>
-          <div class="row">
-            <input type="text" id="calSubLinkInput" readonly>
-            <button class="btn" id="calSubCopyBtn">복사</button>
-          </div>
-        </div>
         <div class="row" style="margin-top:10px;">
           <button class="btn" id="shareRegenBtn">🔄 새로 만들기</button>
           <button class="btn" id="shareOffBtn">공유 끄기</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="share-tab-panel" id="shareTabCal" style="display:none;">
+      <p class="subtext" id="calSubStatusText">내가 쓰는 캘린더 앱(구글/네이버/애플 등)에 등록하는 용도예요. 근무표와 등록한 메모/일정까지 전부 다 보여요. 위 "링크로 공유"와는 완전히 별개의 주소라, 하나를 새로 만들거나 꺼도 다른 하나는 영향받지 않아요.</p>
+      <button class="btn primary block" id="calSubCreateBtn">📅 구독 캘린더 만들기</button>
+      <div id="calSubLinkBox" style="display:none;">
+        <label class="field">구독 캘린더 주소</label>
+        <div class="row">
+          <input type="text" id="calSubLinkInput" readonly>
+          <button class="btn" id="calSubCopyBtn">복사</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="calSubRegenBtn">🔄 새로 만들기</button>
+          <button class="btn" id="calSubOffBtn">구독 끄기</button>
         </div>
       </div>
     </div>
@@ -843,8 +852,11 @@ const state = {
   notes: {},                // { 'YYYY-MM-DD': [ {id, time, text} ] }
   widgetSize: '4x1',        // '4x1' | '4x3' | '4x4'
   editMode: false,
-  shareCode: null,          // 읽기전용 공유 코드 - localStorage 하나에만 의존하면 지워질 위험이 있어서 saveState/동기화로도 이중 보존
-  shareCodeHistory: []      // 예전에 만들었던 공유 코드들 (기기가 바뀌거나 저장공간이 지워져도, 새로 만들 때 예전 것까지 확실히 지우기 위해 기록해둠)
+  shareCode: null,          // 읽기전용 공유 코드 (다른 사람에게 링크로 보여줄 때 - 근무표만, 메모는 제외)
+  shareCodeHistory: [],     // 예전에 만들었던 공유 코드들 (새로 만들 때 예전 것까지 확실히 지우기 위해 기록)
+  calSubCode: null,         // 구독 캘린더용 코드 (본인 캘린더 앱에 등록할 때 - 근무표+메모 전부 포함, 공유코드와는 완전히 별개)
+  calSubCodeHistory: [],
+  syncCodeHistory: []       // 기기간 동기화 코드도 새로 만들 때마다 예전 코드가 서버에 안 남게 기록
 };
 
 // ================= DATE HELPERS =================
@@ -1426,6 +1438,7 @@ function setStartDate(date, showToast){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   if(showToast) showToastMsg(`${date.getMonth()+1}월 ${date.getDate()}일을 ${team.name} 주간 첫날로 지정 — 전체 일정이 갱신되었습니다`);
 }
 
@@ -2049,6 +2062,7 @@ function closeSettingsModalKeep(){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg('설정이 저장되었습니다');
 }
 function closeSettingsModalCancel(){
@@ -2059,6 +2073,7 @@ function closeSettingsModalCancel(){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg('변경사항이 취소되었습니다');
 }
 
@@ -2073,6 +2088,7 @@ document.getElementById('syncNowBtn').onclick = async ()=>{
   saveState();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   setTimeout(()=>{
     btn.textContent = '🔄';
     btn.disabled = false;
@@ -2237,6 +2253,7 @@ document.getElementById('shareBtn').onclick = ()=>{
   document.getElementById('sharePreviewWrap').style.display='none';
   switchShareTab('photo');
   renderShareStatus();
+  renderCalSubStatus();
   shareModal.classList.add('show');
 };
 document.getElementById('shareModalClose').onclick = ()=> shareModal.classList.remove('show');
@@ -2245,16 +2262,20 @@ shareModal.addEventListener('click', (e)=>{ if(e.target===shareModal) shareModal
 function switchShareTab(tab){
   const photoBtn = document.getElementById('shareTabPhotoBtn');
   const linkBtn = document.getElementById('shareTabLinkBtn');
+  const calBtn = document.getElementById('shareTabCalBtn');
   const photoPanel = document.getElementById('shareTabPhoto');
   const linkPanel = document.getElementById('shareTabLink');
-  const isPhoto = tab==='photo';
-  photoBtn.classList.toggle('active', isPhoto);
-  linkBtn.classList.toggle('active', !isPhoto);
-  photoPanel.style.display = isPhoto ? 'block' : 'none';
-  linkPanel.style.display = isPhoto ? 'none' : 'block';
+  const calPanel = document.getElementById('shareTabCal');
+  photoBtn.classList.toggle('active', tab==='photo');
+  linkBtn.classList.toggle('active', tab==='link');
+  calBtn.classList.toggle('active', tab==='cal');
+  photoPanel.style.display = tab==='photo' ? 'block' : 'none';
+  linkPanel.style.display = tab==='link' ? 'block' : 'none';
+  calPanel.style.display = tab==='cal' ? 'block' : 'none';
 }
 document.getElementById('shareTabPhotoBtn').onclick = ()=> switchShareTab('photo');
 document.getElementById('shareTabLinkBtn').onclick = ()=> switchShareTab('link');
+document.getElementById('shareTabCalBtn').onclick = ()=> switchShareTab('cal');
 
 document.getElementById('generateShareImage').onclick = async ()=>{
   const [y,m] = document.getElementById('shareMonthSelect').value.split('-').map(Number);
@@ -2506,6 +2527,7 @@ function renderModalNotes(){
       updateNativeWidget();
       pushStateToCloud();
       pushStateToShare();
+      pushStateToCalSub();
     };
     listEl.appendChild(row);
   });
@@ -2532,6 +2554,7 @@ function submitModalNote(){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg('일정이 저장되었습니다 ✓');
   textEl.focus();
 }
@@ -2549,6 +2572,7 @@ document.getElementById('modalSave').onclick = ()=>{
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg((modalDate.getMonth()+1)+'월 '+modalDate.getDate()+'일 근무가 저장되었습니다');
 };
 
@@ -2567,6 +2591,7 @@ document.getElementById('modalReset').onclick = ()=>{
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg('해당 날짜가 자동 계산으로 되돌아갔습니다');
 };
 
@@ -2709,8 +2734,16 @@ function buildSyncPayload(){
     shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
     referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
     alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize,
-    shareCode: state.shareCode, shareCodeHistory: state.shareCodeHistory
+    shareCode: state.shareCode, shareCodeHistory: state.shareCodeHistory,
+    calSubCode: state.calSubCode, calSubCodeHistory: state.calSubCodeHistory,
+    syncCodeHistory: state.syncCodeHistory
   };
+}
+
+// 다른 사람에게 "링크로 보여주는" 용도 - 근무표만 보이고, 개인 메모/일정은 제외
+function buildShareOnlyPayload(){
+  const full = buildSyncPayload();
+  return { ...full, notes: {} };
 }
 
 function applyRemoteState(data){
@@ -2729,7 +2762,17 @@ function applyRemoteState(data){
     const merged = new Set([...(state.shareCodeHistory||[]), ...data.shareCodeHistory]);
     state.shareCodeHistory = [...merged];
   }
+  if(data.calSubCode !== undefined) state.calSubCode = data.calSubCode;
+  if(Array.isArray(data.calSubCodeHistory)){
+    const merged = new Set([...(state.calSubCodeHistory||[]), ...data.calSubCodeHistory]);
+    state.calSubCodeHistory = [...merged];
+  }
+  if(Array.isArray(data.syncCodeHistory)){
+    const merged = new Set([...(state.syncCodeHistory||[]), ...data.syncCodeHistory]);
+    state.syncCodeHistory = [...merged];
+  }
   shareCode = state.shareCode; // 이 기기의 진행 중인 변수도 최신 값으로 맞춤
+  calSubCode = state.calSubCode;
   ensureTimeDefaults();
   renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
   renderCalendar(); renderNowCard(); updateMyTeamHint();
@@ -2739,6 +2782,7 @@ function applyRemoteState(data){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
   showToastMsg('다른 기기의 변경사항을 받아왔어요 🔄');
 }
 
@@ -2789,7 +2833,33 @@ function generateSyncCode(){
   return code;
 }
 
-document.getElementById('syncStartBtn').onclick = ()=> startSync(generateSyncCode(), {pushInitial:true});
+async function deleteAllKnownSyncCodes(){
+  if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
+  const codes = new Set(state.syncCodeHistory || []);
+  if(syncCode) codes.add(syncCode);
+  const results = await Promise.all([...codes].map(async code => {
+    try{ await syncDb.collection('shiftNoteSync').doc(code).delete(); return { code, ok:true }; }
+    catch(e){ return { code, ok:false }; }
+  }));
+  const failedCodes = results.filter(r=>!r.ok).map(r=>r.code);
+  return { ok: failedCodes.length===0, failedCodes };
+}
+function trackSyncCodeForCleanup(oldCode){
+  if(!oldCode) return;
+  if(!state.syncCodeHistory) state.syncCodeHistory = [];
+  if(!state.syncCodeHistory.includes(oldCode)) state.syncCodeHistory.push(oldCode);
+  if(state.syncCodeHistory.length > 20) state.syncCodeHistory = state.syncCodeHistory.slice(-20);
+  saveState();
+}
+
+document.getElementById('syncStartBtn').onclick = async ()=>{
+  if(!ensureFirebaseInit()){ showToastMsg('동기화 기능이 아직 설정되지 않았어요'); return; }
+  showToastMsg('예전 동기화 코드를 정리하는 중...');
+  await deleteAllKnownSyncCodes(); // 이전에 여러 번 "시작하기"를 눌러서 쌓인 예전 코드들을 먼저 정리
+  const newCode = generateSyncCode();
+  trackSyncCodeForCleanup(syncCode);
+  startSync(newCode, {pushInitial:true});
+};
 document.getElementById('syncJoinBtn').onclick = ()=>{
   const val = document.getElementById('syncCodeInput').value.trim();
   if(!val){ showToastMsg('코드를 입력해주세요'); return; }
@@ -2799,87 +2869,77 @@ document.getElementById('syncStopBtn').onclick = async ()=>{
   const ok = await showConfirm('동기화를 끄면 이 기기는 더 이상 다른 기기와 실시간으로 연결되지 않아요.\n계속할까요?');
   if(!ok) return;
   if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+  showToastMsg('동기화 코드를 정리하는 중...');
+  const result = await deleteAllKnownSyncCodes();
   syncCode = null;
   localStorage.removeItem('shiftNoteSyncCode');
   renderSyncStatus();
-  showToastMsg('동기화를 껐어요');
+  if(result && !result.ok && result.failedCodes && result.failedCodes.length){
+    showToastMsg(`껐지만 코드 일부(${result.failedCodes.join(', ')})는 서버에서 못 지웠어요`);
+  } else {
+    showToastMsg('동기화를 껐고, 서버에서도 확실히 지웠어요');
+  }
 };
 
 // (동기화 자동 재연결은 하단 INIT 섹션에서 loadState() 이후에 실행됩니다)
 
-// ================= 읽기전용 공유 링크 (+ 구독 캘린더 링크) =================
+// ================= 읽기전용 공유 링크 (근무표만, 다른 사람에게 보여줄 때) =================
 const urlParams = new URLSearchParams(location.search);
 const VIEW_SHARE_CODE = urlParams.get('view');
 const CALENDAR_WORKER_ORIGIN = 'https://proud-sun-54e5.doheonk34.workers.dev';
 
-let shareCode = null; // 실제 값은 INIT에서 loadState() 이후 state.shareCode 기준으로 채워짐
+let shareCode = null;   // 다른 사람에게 링크로 보여줄 때 (근무표만, 메모 제외) - INIT에서 state.shareCode로 채워짐
+let calSubCode = null;  // 내 캘린더 앱 구독용 (근무표+메모 전부) - shareCode와 완전히 독립적인 별개 코드
 
 function renderShareStatus(){
   const statusEl = document.getElementById('shareStatusText');
   const linkBox = document.getElementById('shareLinkBox');
   const createBtn = document.getElementById('shareCreateBtn');
   if(shareCode){
-    const link = location.origin + location.pathname + '?view=' + shareCode;
-    document.getElementById('shareLinkInput').value = link;
-    const calBox = document.getElementById('calSubLinkBox');
-    if(calBox){
-      const calLink = CALENDAR_WORKER_ORIGIN + '/' + shareCode + '/calendar.ics';
-      document.getElementById('calSubLinkInput').value = calLink;
-      calBox.style.display = 'block';
-    }
+    document.getElementById('shareLinkInput').value = location.origin + location.pathname + '?view=' + shareCode;
     linkBox.style.display = 'block';
     createBtn.style.display = 'none';
-    statusEl.textContent = '공유 중이에요. 아래 링크를 받은 사람은 실시간으로 내 근무표를 볼 수 있어요 (수정은 못함).';
+    statusEl.textContent = '공유 중이에요. 아래 링크를 받은 사람은 실시간으로 내 근무표를 볼 수 있어요 (메모는 안 보이고, 수정도 못함).';
   } else {
     linkBox.style.display = 'none';
-    const calBox = document.getElementById('calSubLinkBox');
-    if(calBox) calBox.style.display = 'none';
     createBtn.style.display = 'block';
-    statusEl.textContent = '가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 링크를 받은 사람은 보기만 가능하고 수정은 못해요.';
+    statusEl.textContent = '가족이나 동료에게 링크 하나로 내 근무표를 실시간으로 보여줄 수 있어요. 개인 메모/일정은 안 보이고, 근무표만 보여요.';
   }
 }
 
 let lastSharedPayloadJSON = null;
 function pushStateToShare(){
   if(!shareCode || !stateReady || !ensureFirebaseInit()) return;
-  const payload = buildSyncPayload();
+  const payload = buildShareOnlyPayload(); // 근무표만 (메모 제외)
   const payloadJSON = stableStringify(payload);
-  if(payloadJSON === lastSharedPayloadJSON) return; // 변경 없으면 전송 생략
+  if(payloadJSON === lastSharedPayloadJSON) return;
   lastSharedPayloadJSON = payloadJSON;
   syncDb.collection('shiftNoteShare').doc(shareCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(()=>{});
 }
-
-// 지금까지 만들었던 공유 코드들(현재+히스토리)을 전부 지워서, 어디서 만들어졌든 예전 링크가 절대 안 살아남게 함
 async function deleteAllKnownShareCodes(){
   if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
   const codes = new Set(state.shareCodeHistory || []);
   if(shareCode) codes.add(shareCode);
   const results = await Promise.all([...codes].map(async code => {
-    try{
-      await syncDb.collection('shiftNoteShare').doc(code).delete();
-      return { code, ok:true };
-    }catch(e){
-      return { code, ok:false, error: (e && e.message) || String(e) };
-    }
+    try{ await syncDb.collection('shiftNoteShare').doc(code).delete(); return { code, ok:true }; }
+    catch(e){ return { code, ok:false }; }
   }));
   const failedCodes = results.filter(r=>!r.ok).map(r=>r.code);
-  return { ok: failedCodes.length===0, failedCodes, total: results.length };
+  return { ok: failedCodes.length===0, failedCodes };
 }
-
 function setShareCode(newCode){
   if(shareCode){
     if(!state.shareCodeHistory) state.shareCodeHistory = [];
     if(!state.shareCodeHistory.includes(shareCode)) state.shareCodeHistory.push(shareCode);
-    // 히스토리가 너무 길어지지 않도록 최근 20개만 유지
     if(state.shareCodeHistory.length > 20) state.shareCodeHistory = state.shareCodeHistory.slice(-20);
   }
   shareCode = newCode;
   state.shareCode = newCode;
+  lastSharedPayloadJSON = null;
   saveState();
 }
-
 document.getElementById('shareCreateBtn').onclick = ()=>{
   if(!ensureFirebaseInit()){ showToastMsg('동기화 기능이 아직 설정되지 않았어요'); return; }
   setShareCode(generateSyncCode());
@@ -2892,45 +2952,131 @@ document.getElementById('shareCopyBtn').onclick = async ()=>{
   try{ await navigator.clipboard.writeText(val); showToastMsg('링크를 복사했어요'); }
   catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
 };
-const calCopyBtn = document.getElementById('calSubCopyBtn');
-if(calCopyBtn) calCopyBtn.onclick = async ()=>{
-  const val = document.getElementById('calSubLinkInput').value;
-  try{ await navigator.clipboard.writeText(val); showToastMsg('구독 캘린더 주소를 복사했어요'); }
-  catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
-};
 document.getElementById('shareRegenBtn').onclick = async ()=>{
-  const ok = await showConfirm('새 링크를 만들면 예전에 공유했던 링크(구독 캘린더 포함)는 모두 더 이상 작동하지 않아요.\n계속할까요?');
+  const ok = await showConfirm('새 링크를 만들면 예전 링크는 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
-  showToastMsg('예전 링크들을 정리하는 중...');
-  const result = await deleteAllKnownShareCodes(); // 이 기기가 알고 있는 모든 예전 코드를 먼저 확실히 지움
+  showToastMsg('예전 링크를 정리하는 중...');
+  const result = await deleteAllKnownShareCodes();
   setShareCode(generateSyncCode());
   renderShareStatus();
   pushStateToShare();
-  if(result && !result.ok && result.failedCodes && result.failedCodes.length){
-    showToastMsg(`새 링크는 만들어졌지만, 예전 코드 일부(${result.failedCodes.join(', ')})는 못 지웠어요. Firebase 콘솔에서 직접 지워주세요`);
+  if(result && !result.ok && result.failedCodes.length){
+    showToastMsg(`새 링크는 만들어졌지만, 예전 코드 일부(${result.failedCodes.join(', ')})는 못 지웠어요`);
   } else {
-    showToastMsg('새 공유 링크를 만들었어요 (예전 링크는 모두 만료됐어요)');
+    showToastMsg('새 공유 링크를 만들었어요 (예전 링크는 만료됐어요)');
   }
 };
 document.getElementById('shareOffBtn').onclick = async ()=>{
-  const ok = await showConfirm('공유를 끄면 지금까지 만들었던 모든 링크(구독 캘린더 포함)가 더 이상 작동하지 않아요.\n계속할까요?');
+  const ok = await showConfirm('공유를 끄면 지금까지 만들었던 링크가 모두 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
-  showToastMsg('링크들을 정리하는 중...');
+  showToastMsg('링크를 정리하는 중...');
   const result = await deleteAllKnownShareCodes();
   setShareCode(null);
   renderShareStatus();
-  if(result && !result.ok && result.failedCodes && result.failedCodes.length){
-    showToastMsg(`앱에서는 껐지만, 코드 일부(${result.failedCodes.join(', ')})는 서버에서 못 지웠어요. Firebase 콘솔에서 직접 지워주세요`);
+  if(result && !result.ok && result.failedCodes.length){
+    showToastMsg(`앱에서는 껐지만, 코드 일부(${result.failedCodes.join(', ')})는 서버에서 못 지웠어요`);
   } else if(result && result.reason === 'no-firebase'){
-    showToastMsg('공유는 껐지만, 서버 연결이 안 돼서 삭제 확인은 못했어요. 인터넷 연결 확인 후 다시 시도해주세요');
+    showToastMsg('공유는 껐지만, 서버 연결이 안 돼서 삭제 확인은 못했어요');
   } else {
     showToastMsg('공유를 껐고, 서버에서도 확실히 지웠어요');
   }
 };
 
-// 같은 브라우저에서 이 앱을 여러 탭/창으로 열어놨을 때: 한쪽에서 공유를 끄거나 새로 만들어도
-// 다른 탭은 그 사실을 모른 채 계속 예전 shareCode로 자동저장(4초 간격)을 밀어넣어서
-// 방금 지운 공유 문서를 도로 살려내는 문제가 있었음. storage 이벤트로 다른 탭의 변경을 즉시 감지해서 따라감.
+// ================= 구독 캘린더 링크 (근무표+메모 전부, 내 캘린더 앱에 등록할 때) =================
+// shareCode와 완전히 독립적인 별개 코드/문서 - 하나를 새로 만들거나 꺼도 다른 하나는 전혀 영향받지 않음
+function renderCalSubStatus(){
+  const statusEl = document.getElementById('calSubStatusText');
+  const linkBox = document.getElementById('calSubLinkBox');
+  const createBtn = document.getElementById('calSubCreateBtn');
+  if(calSubCode){
+    document.getElementById('calSubLinkInput').value = CALENDAR_WORKER_ORIGIN + '/' + calSubCode + '/calendar.ics';
+    linkBox.style.display = 'block';
+    createBtn.style.display = 'none';
+    statusEl.textContent = '구독 중이에요. 근무표+메모/일정이 전부 이 주소로 나가요.';
+  } else {
+    linkBox.style.display = 'none';
+    createBtn.style.display = 'block';
+    statusEl.textContent = '내가 쓰는 캘린더 앱(구글/네이버/애플 등)에 등록하는 용도예요. 근무표와 등록한 메모/일정까지 전부 다 보여요. "링크로 공유"와는 완전히 별개예요.';
+  }
+}
+let lastCalSubPayloadJSON = null;
+function pushStateToCalSub(){
+  if(!calSubCode || !stateReady || !ensureFirebaseInit()) return;
+  const payload = buildSyncPayload(); // 근무표 + 메모 전부
+  const payloadJSON = stableStringify(payload);
+  if(payloadJSON === lastCalSubPayloadJSON) return;
+  lastCalSubPayloadJSON = payloadJSON;
+  syncDb.collection('shiftNoteShare').doc(calSubCode).set({
+    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(()=>{});
+}
+async function deleteAllKnownCalSubCodes(){
+  if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
+  const codes = new Set(state.calSubCodeHistory || []);
+  if(calSubCode) codes.add(calSubCode);
+  const results = await Promise.all([...codes].map(async code => {
+    try{ await syncDb.collection('shiftNoteShare').doc(code).delete(); return { code, ok:true }; }
+    catch(e){ return { code, ok:false }; }
+  }));
+  const failedCodes = results.filter(r=>!r.ok).map(r=>r.code);
+  return { ok: failedCodes.length===0, failedCodes };
+}
+function setCalSubCode(newCode){
+  if(calSubCode){
+    if(!state.calSubCodeHistory) state.calSubCodeHistory = [];
+    if(!state.calSubCodeHistory.includes(calSubCode)) state.calSubCodeHistory.push(calSubCode);
+    if(state.calSubCodeHistory.length > 20) state.calSubCodeHistory = state.calSubCodeHistory.slice(-20);
+  }
+  calSubCode = newCode;
+  state.calSubCode = newCode;
+  lastCalSubPayloadJSON = null;
+  saveState();
+}
+document.getElementById('calSubCreateBtn').onclick = ()=>{
+  if(!ensureFirebaseInit()){ showToastMsg('동기화 기능이 아직 설정되지 않았어요'); return; }
+  setCalSubCode(generateSyncCode());
+  renderCalSubStatus();
+  pushStateToCalSub();
+  showToastMsg('구독 캘린더가 만들어졌어요');
+};
+document.getElementById('calSubCopyBtn').onclick = async ()=>{
+  const val = document.getElementById('calSubLinkInput').value;
+  try{ await navigator.clipboard.writeText(val); showToastMsg('구독 캘린더 주소를 복사했어요'); }
+  catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
+};
+document.getElementById('calSubRegenBtn').onclick = async ()=>{
+  const ok = await showConfirm('새로 만들면 예전 구독 주소는 더 이상 작동하지 않아요.\n캘린더 앱에서도 다시 등록하셔야 해요. 계속할까요?');
+  if(!ok) return;
+  showToastMsg('예전 구독 코드를 정리하는 중...');
+  const result = await deleteAllKnownCalSubCodes();
+  setCalSubCode(generateSyncCode());
+  renderCalSubStatus();
+  pushStateToCalSub();
+  if(result && !result.ok && result.failedCodes.length){
+    showToastMsg(`새로 만들었지만, 예전 코드 일부(${result.failedCodes.join(', ')})는 못 지웠어요`);
+  } else {
+    showToastMsg('새 구독 캘린더를 만들었어요 (예전 것은 만료됐어요)');
+  }
+};
+document.getElementById('calSubOffBtn').onclick = async ()=>{
+  const ok = await showConfirm('구독을 끄면 지금까지 만들었던 구독 주소가 모두 더 이상 작동하지 않아요.\n계속할까요?');
+  if(!ok) return;
+  showToastMsg('구독 코드를 정리하는 중...');
+  const result = await deleteAllKnownCalSubCodes();
+  setCalSubCode(null);
+  renderCalSubStatus();
+  if(result && !result.ok && result.failedCodes.length){
+    showToastMsg(`껐지만, 코드 일부(${result.failedCodes.join(', ')})는 서버에서 못 지웠어요`);
+  } else if(result && result.reason === 'no-firebase'){
+    showToastMsg('껐지만, 서버 연결이 안 돼서 삭제 확인은 못했어요');
+  } else {
+    showToastMsg('구독을 껐고, 서버에서도 확실히 지웠어요');
+  }
+};
+
+// 같은 브라우저에서 이 앱을 여러 탭/창으로 열어놨을 때: 한쪽에서 공유/구독을 끄거나 새로 만들어도
+// 다른 탭은 그 사실을 모른 채 계속 예전 코드로 자동저장(4초 간격)을 밀어넣어서
+// 방금 지운 문서를 도로 살려내는 문제가 있었음. storage 이벤트로 다른 탭의 변경을 즉시 감지해서 따라감.
 window.addEventListener('storage', (e)=>{
   if(e.key !== STORAGE_KEY || !e.newValue) return;
   try{
@@ -2938,10 +3084,18 @@ window.addEventListener('storage', (e)=>{
     if(data.shareCode !== undefined && data.shareCode !== state.shareCode){
       state.shareCode = data.shareCode;
       shareCode = data.shareCode;
-      lastSharedPayloadJSON = null; // 코드가 바뀌었으니 다음 저장 때 새 코드 기준으로 다시 올리게 함
+      lastSharedPayloadJSON = null;
       renderShareStatus();
     }
     if(Array.isArray(data.shareCodeHistory)) state.shareCodeHistory = data.shareCodeHistory;
+    if(data.calSubCode !== undefined && data.calSubCode !== state.calSubCode){
+      state.calSubCode = data.calSubCode;
+      calSubCode = data.calSubCode;
+      lastCalSubPayloadJSON = null;
+      renderCalSubStatus();
+    }
+    if(Array.isArray(data.calSubCodeHistory)) state.calSubCodeHistory = data.calSubCodeHistory;
+    if(Array.isArray(data.syncCodeHistory)) state.syncCodeHistory = data.syncCodeHistory;
   }catch(e){ /* 무시 */ }
 });
 
@@ -3059,7 +3213,10 @@ function saveState(){
       notes: state.notes,
       widgetSize: state.widgetSize,
       shareCode: state.shareCode,
-      shareCodeHistory: state.shareCodeHistory
+      shareCodeHistory: state.shareCodeHistory,
+      calSubCode: state.calSubCode,
+      calSubCodeHistory: state.calSubCodeHistory,
+      syncCodeHistory: state.syncCodeHistory
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }catch(e){ /* 저장 불가(사파리 프라이빗 모드 등) 시 조용히 무시 */ }
@@ -3082,6 +3239,9 @@ function loadState(){
     state.widgetSize = data.widgetSize || '4x1';
     state.shareCode = data.shareCode !== undefined ? data.shareCode : null;
     state.shareCodeHistory = Array.isArray(data.shareCodeHistory) ? data.shareCodeHistory : [];
+    state.calSubCode = data.calSubCode !== undefined ? data.calSubCode : null;
+    state.calSubCodeHistory = Array.isArray(data.calSubCodeHistory) ? data.calSubCodeHistory : [];
+    state.syncCodeHistory = Array.isArray(data.syncCodeHistory) ? data.syncCodeHistory : [];
     // 예전 버전에서 공유 코드를 별도 localStorage 키에만 저장했던 경우, 이번에 메인 저장소로 옮겨옴
     if(!state.shareCode){
       const legacyCode = localStorage.getItem('shiftNoteShareCode');
@@ -3124,6 +3284,7 @@ if(VIEW_SHARE_CODE){
   // ---- 일반(소유자) 모드 ----
   loadState();
   shareCode = state.shareCode; // localStorage/동기화로 불러온 값을 이 세션의 진행 변수에 반영
+  calSubCode = state.calSubCode;
   stateReady = true; // 여기서부터는 저장/전송해도 안전함 (그 전엔 절대 안 함)
   ensureTimeDefaults();
   renderShiftTypeRows();
@@ -3138,8 +3299,9 @@ if(VIEW_SHARE_CODE){
   if(syncCode) startSync(syncCode, {pushInitial:false});
   else renderSyncStatus();
   renderShareStatus();
+  renderCalSubStatus();
 
-  const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); };
+  const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); pushStateToCalSub(); };
   setInterval(saveAll, 4000); // 4초마다 자동 저장 (로컬 + 동기화/공유 켜져있으면 클라우드까지)
   window.addEventListener('beforeunload', saveAll);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
@@ -3151,6 +3313,7 @@ if(VIEW_SHARE_CODE){
   updateNativeWidget();
   pushStateToCloud();
   pushStateToShare();
+  pushStateToCalSub();
 }
 
 // ================= PWA: SERVICE WORKER 등록 =================
