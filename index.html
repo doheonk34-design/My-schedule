@@ -2775,7 +2775,7 @@ async function deleteAllGcalMarkedEvents(timeMin, timeMax){
   let deletedCount = 0;
   let hadListError = false;
   do{
-    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${encodeURIComponent('shiftnote=1')}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250${pageToken?'&pageToken='+encodeURIComponent(pageToken):''}`;
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=shiftnote=1&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250${pageToken?'&pageToken='+encodeURIComponent(pageToken):''}`;
     const res = await fetch(listUrl, { headers: { Authorization: 'Bearer '+googleAccessToken } });
     if(!res.ok){ hadListError = true; break; }
     const data = await res.json();
