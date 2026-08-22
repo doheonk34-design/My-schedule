@@ -532,7 +532,7 @@
         <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">📅 구글 캘린더 연동<span class="chevron">▾</span></h3>
           <div class="card-body">
-            <p class="subtext" id="gcalStatusText">구글 캘린더에 근무표와 등록한 일정을 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요. (아이폰/PC 웹 화면에서만 사용 가능해요)</p>
+            <p class="subtext" id="gcalStatusText">전달·이번달·다음달치 근무표와 등록한 일정을 구글 캘린더에 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요. (아이폰/PC 웹 화면에서만 사용 가능해요)</p>
             <button class="btn primary block" id="gcalConnectBtn">🔗 구글 캘린더 연동하기</button>
             <button class="btn block" id="gcalSyncNowBtn" style="display:none;">🔄 지금 동기화</button>
             <button class="btn block" id="gcalDisconnectBtn" style="display:none;">연동 해제</button>
@@ -2654,7 +2654,6 @@ const GOOGLE_CLIENT_ID = '781370742400-2v7696coka4ffl9r8j7g9v15b1im6n6g.apps.goo
 let gisTokenClient = null;
 let googleAccessToken = null;
 let googleTokenExpiresAt = 0;
-const GCAL_SYNC_DAYS = 30;
 
 function gcalAvailable(){
   // 안드로이드 웹뷰(APK) 안에서는 구글이 보안상 로그인 팝업을 막아버려서 아예 지원 안 함.
@@ -2703,7 +2702,7 @@ function renderGcalStatus(){
     syncBtn.style.display = 'block';
     disconnectBtn.style.display = 'block';
   } else {
-    statusEl.textContent = '구글 캘린더에 근무표와 등록한 일정을 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요.';
+    statusEl.textContent = '전달·이번달·다음달치 근무표와 등록한 일정을 구글 캘린더에 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요.';
     connectBtn.style.display = 'block';
     syncBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
@@ -2754,50 +2753,71 @@ async function ensureGoogleToken(){
   });
 }
 
-async function removeAllGcalEvents(){
-  const ok = await ensureGoogleToken();
-  if(!ok) return;
-  try{
-    const timeMin = addDays(startOfDay(new Date()), -1).toISOString();
-    const timeMax = addDays(startOfDay(new Date()), 60).toISOString();
-    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${encodeURIComponent('shiftnote=1')}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250`;
+async function deleteAllGcalMarkedEvents(timeMin, timeMax){
+  let pageToken = '';
+  do{
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${encodeURIComponent('shiftnote=1')}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250${pageToken?'&pageToken='+encodeURIComponent(pageToken):''}`;
     const res = await fetch(listUrl, { headers: { Authorization: 'Bearer '+googleAccessToken } });
-    if(!res.ok) return;
+    if(!res.ok) break;
     const data = await res.json();
     for(const ev of (data.items||[])){
       await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.id}`, {
         method:'DELETE', headers:{ Authorization:'Bearer '+googleAccessToken }
       }).catch(()=>{});
     }
+    pageToken = data.nextPageToken || '';
+  } while(pageToken);
+}
+
+async function removeAllGcalEvents(){
+  const ok = await ensureGoogleToken();
+  if(!ok) return;
+  try{
+    const now = new Date();
+    const rangeStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const rangeEnd = new Date(now.getFullYear(), now.getMonth()+2, 0);
+    const timeMin = rangeStart.toISOString();
+    const timeMax = addDays(rangeEnd, 1).toISOString();
+    await deleteAllGcalMarkedEvents(timeMin, timeMax);
   }catch(e){ /* 조용히 실패 */ }
 }
 
+let gcalSyncing = false;
+let gcalSyncQueued = false;
 async function syncToGoogleCalendar(){
   if(!gcalAvailable()) return;
+  if(gcalSyncing){ gcalSyncQueued = true; return; } // 이미 동기화 중이면 겹쳐 돌리지 않고, 끝나면 한 번 더 돌리도록 예약만 해둠
+  gcalSyncing = true;
+  try{
+    await syncToGoogleCalendarInner();
+  } finally {
+    gcalSyncing = false;
+    if(gcalSyncQueued){
+      gcalSyncQueued = false;
+      syncToGoogleCalendar();
+    }
+  }
+}
+async function syncToGoogleCalendarInner(){
   const ok = await ensureGoogleToken();
   if(!ok) return;
 
   try{
     const now = new Date();
-    const timeMin = startOfDay(now).toISOString();
-    const timeMax = addDays(startOfDay(now), GCAL_SYNC_DAYS).toISOString();
+    // 위젯/캘린더 앱에서 전달·익달로 넘겨봐도 근무표가 보이도록, 전달 1일 ~ 익달 말일까지 동기화
+    const rangeStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const rangeEnd = new Date(now.getFullYear(), now.getMonth()+2, 0); // 익달의 마지막 날
+    const totalDays = Math.round((rangeEnd - rangeStart)/86400000) + 1;
+    const timeMin = rangeStart.toISOString();
+    const timeMax = addDays(rangeEnd, 1).toISOString(); // exclusive 상한이라 하루 더해줌
 
     // 1. 우리 앱이 예전에 만들어둔 이벤트 찾아서 삭제 (근무표 바뀌면 옛날 걸로 안 남게)
-    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=${encodeURIComponent('shiftnote=1')}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=250`;
-    const listRes = await fetch(listUrl, { headers: { Authorization: 'Bearer '+googleAccessToken } });
-    if(listRes.ok){
-      const listData = await listRes.json();
-      for(const ev of (listData.items||[])){
-        await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.id}`, {
-          method:'DELETE', headers:{ Authorization:'Bearer '+googleAccessToken }
-        }).catch(()=>{});
-      }
-    }
+    await deleteAllGcalMarkedEvents(timeMin, timeMax);
 
     // 2. 새 이벤트 만들기 (근무표 + 메모)
     const events = [];
-    for(let d=0; d<GCAL_SYNC_DAYS; d++){
-      const date = addDays(startOfDay(now), d);
+    for(let d=0; d<totalDays; d++){
+      const date = addDays(rangeStart, d);
       const dateStr = isoDate(date);
       const mine = shiftForTeamOnDate(date, state.myTeamId);
       const matched = state.shiftTypes.find(st=>st.name===mine.label);
@@ -3124,7 +3144,6 @@ if(VIEW_SHARE_CODE){
   if(syncCode) startSync(syncCode, {pushInitial:false});
   else renderSyncStatus();
   renderShareStatus();
-  if(localStorage.getItem('gcalConnected')) syncToGoogleCalendar(); // 연동돼있었으면 조용히 백그라운드에서 갱신 시도
 
   const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); };
   setInterval(saveAll, 4000); // 4초마다 자동 저장 (로컬 + 동기화/공유 켜져있으면 클라우드까지)
