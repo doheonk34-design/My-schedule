@@ -532,7 +532,7 @@
         <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">📅 구글 캘린더 연동<span class="chevron">▾</span></h3>
           <div class="card-body">
-            <p class="subtext" id="gcalStatusText">전달·이번달·다음달치 근무표와 등록한 일정을 구글 캘린더에 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요. (아이폰/PC 웹 화면에서만 사용 가능해요)</p>
+            <p class="subtext" id="gcalStatusText">전달·이번달·다음달치 근무(주간/야간/대근 등)와 등록한 일정을 구글 캘린더에 자동으로 올려줘요 (휴무·비번은 제외). 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요. (아이폰/PC 웹 화면에서만 사용 가능해요)</p>
             <button class="btn primary block" id="gcalConnectBtn">🔗 구글 캘린더 연동하기</button>
             <button class="btn block" id="gcalSyncNowBtn" style="display:none;">🔄 지금 동기화</button>
             <button class="btn block" id="gcalDisconnectBtn" style="display:none;">연동 해제</button>
@@ -2718,7 +2718,7 @@ function renderGcalStatus(){
     syncBtn.style.display = 'block';
     disconnectBtn.style.display = 'block';
   } else {
-    statusEl.textContent = '전달·이번달·다음달치 근무표와 등록한 일정을 구글 캘린더에 자동으로 올려줘요. 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요.';
+    statusEl.textContent = '전달·이번달·다음달치 근무(주간/야간/대근 등)와 등록한 일정을 구글 캘린더에 자동으로 올려줘요 (휴무·비번은 제외). 알람 켜놓은 근무는 구글 캘린더 알림으로도 울려요.';
     connectBtn.style.display = 'block';
     syncBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
@@ -2860,7 +2860,7 @@ async function syncToGoogleCalendarInner(){
       const mine = shiftForTeamOnDate(date, state.myTeamId);
       const matched = state.shiftTypes.find(st=>st.name===mine.label);
 
-      if(matched){
+      if(matched && matched.role!=='off' && matched.role!=='standby'){
         const times = state.shiftTimes[matched.id];
         const alarm = state.alarms[matched.id];
         let ev;
