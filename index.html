@@ -2694,12 +2694,19 @@ function pushStateToShare(){
 
 // 지금까지 만들었던 공유 코드들(현재+히스토리)을 전부 지워서, 어디서 만들어졌든 예전 링크가 절대 안 살아남게 함
 async function deleteAllKnownShareCodes(){
-  if(!ensureFirebaseInit()) return;
+  if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
   const codes = new Set(state.shareCodeHistory || []);
   if(shareCode) codes.add(shareCode);
-  await Promise.all([...codes].map(code =>
-    syncDb.collection('shiftNoteShare').doc(code).delete().catch(()=>{})
-  ));
+  const results = await Promise.all([...codes].map(async code => {
+    try{
+      await syncDb.collection('shiftNoteShare').doc(code).delete();
+      return { code, ok:true };
+    }catch(e){
+      return { code, ok:false, error: (e && e.message) || String(e) };
+    }
+  }));
+  const failedCodes = results.filter(r=>!r.ok).map(r=>r.code);
+  return { ok: failedCodes.length===0, failedCodes, total: results.length };
 }
 
 function setShareCode(newCode){
@@ -2736,20 +2743,30 @@ document.getElementById('shareRegenBtn').onclick = async ()=>{
   const ok = await showConfirm('새 링크를 만들면 예전에 공유했던 링크(구독 캘린더 포함)는 모두 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
   showToastMsg('예전 링크들을 정리하는 중...');
-  await deleteAllKnownShareCodes(); // 이 기기가 알고 있는 모든 예전 코드를 먼저 확실히 지움
+  const result = await deleteAllKnownShareCodes(); // 이 기기가 알고 있는 모든 예전 코드를 먼저 확실히 지움
   setShareCode(generateSyncCode());
   renderShareStatus();
   pushStateToShare();
-  showToastMsg('새 공유 링크를 만들었어요 (예전 링크는 모두 만료됐어요)');
+  if(result && !result.ok && result.failedCodes && result.failedCodes.length){
+    showToastMsg(`새 링크는 만들어졌지만, 예전 코드 일부(${result.failedCodes.join(', ')})는 못 지웠어요. Firebase 콘솔에서 직접 지워주세요`);
+  } else {
+    showToastMsg('새 공유 링크를 만들었어요 (예전 링크는 모두 만료됐어요)');
+  }
 };
 document.getElementById('shareOffBtn').onclick = async ()=>{
   const ok = await showConfirm('공유를 끄면 지금까지 만들었던 모든 링크(구독 캘린더 포함)가 더 이상 작동하지 않아요.\n계속할까요?');
   if(!ok) return;
   showToastMsg('링크들을 정리하는 중...');
-  await deleteAllKnownShareCodes();
+  const result = await deleteAllKnownShareCodes();
   setShareCode(null);
   renderShareStatus();
-  showToastMsg('공유를 껐어요');
+  if(result && !result.ok && result.failedCodes && result.failedCodes.length){
+    showToastMsg(`앱에서는 껐지만, 코드 일부(${result.failedCodes.join(', ')})는 서버에서 못 지웠어요. Firebase 콘솔에서 직접 지워주세요`);
+  } else if(result && result.reason === 'no-firebase'){
+    showToastMsg('공유는 껐지만, 서버 연결이 안 돼서 삭제 확인은 못했어요. 인터넷 연결 확인 후 다시 시도해주세요');
+  } else {
+    showToastMsg('공유를 껐고, 서버에서도 확실히 지웠어요');
+  }
 };
 
 // 같은 브라우저에서 이 앱을 여러 탭/창으로 열어놨을 때: 한쪽에서 공유를 끄거나 새로 만들어도
