@@ -2650,6 +2650,22 @@ document.getElementById('syncStopBtn').onclick = async ()=>{
 // (동기화 자동 재연결은 하단 INIT 섹션에서 loadState() 이후에 실행됩니다)
 
 // ================= 구글 캘린더 연동 (아이폰/PC 웹 화면 전용) =================
+// 여러 요청을 한 번에 몇 개씩 동시에 처리 (하나씩 순서대로 하면 90개 넘는 요청에 시간이 너무 오래 걸려서,
+// 그 사이에 사파리가 백그라운드에서 실행을 멈춰버려 중간까지만 반영되는 문제가 있었음)
+async function runWithConcurrency(items, worker, concurrency){
+  concurrency = concurrency || 6;
+  let i = 0;
+  async function runNext(){
+    while(i < items.length){
+      const idx = i++;
+      try{ await worker(items[idx], idx); }catch(e){}
+    }
+  }
+  const workers = [];
+  for(let w=0; w<Math.min(concurrency, items.length); w++) workers.push(runNext());
+  await Promise.all(workers);
+}
+
 const GOOGLE_CLIENT_ID = '781370742400-2v7696coka4ffl9r8j7g9v15b1im6n6g.apps.googleusercontent.com';
 let gisTokenClient = null;
 let googleAccessToken = null;
@@ -2779,12 +2795,12 @@ async function deleteAllGcalMarkedEvents(timeMin, timeMax){
     const res = await fetch(listUrl, { headers: { Authorization: 'Bearer '+googleAccessToken } });
     if(!res.ok){ hadListError = true; break; }
     const data = await res.json();
-    for(const ev of (data.items||[])){
+    await runWithConcurrency(data.items||[], async (ev)=>{
       const delRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.id}`, {
         method:'DELETE', headers:{ Authorization:'Bearer '+googleAccessToken }
       }).catch(()=>null);
       if(delRes && (delRes.ok || delRes.status===410)) deletedCount++; // 410=이미 지워진 이벤트, 이것도 성공으로 침
-    }
+    });
     pageToken = data.nextPageToken || '';
   } while(pageToken);
   return { ok: !hadListError, deletedCount };
@@ -2906,15 +2922,17 @@ async function syncToGoogleCalendarInner(){
       });
     }
 
-    for(const ev of events){
-      await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    let insertedCount = 0;
+    await runWithConcurrency(events, async (ev)=>{
+      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method:'POST',
         headers:{ Authorization:'Bearer '+googleAccessToken, 'Content-Type':'application/json' },
         body: JSON.stringify(ev)
-      }).catch(()=>{});
-    }
+      }).catch(()=>null);
+      if(res && res.ok) insertedCount++;
+    });
 
-    showToastMsg('구글 캘린더에 동기화됐어요 📅');
+    showToastMsg(`구글 캘린더에 동기화됐어요 📅 (${insertedCount}건)`);
   }catch(e){ /* 토큰 만료 등으로 실패하면 조용히 넘어감 - 다음 동기화 때 다시 시도됨 */ }
 }
 
