@@ -542,13 +542,14 @@
         <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">🔄 기기 간 동기화<span class="chevron">▾</span></h3>
           <div class="card-body">
-            <p class="subtext" id="syncStatusText">아이폰과 안드로이드에서 같은 코드를 입력하면 실시간으로 데이터가 서로 반영돼요.</p>
+            <p class="subtext" id="syncStatusText">아이폰과 안드로이드에서 같은 코드를 입력하면 데이터가 서로 반영돼요. 앱을 처음 열 때, 또는 "지금 동기화"를 눌렀을 때만 최신 내용을 가져와요 (계속 실시간으로 받아오지 않아요).</p>
             <button class="btn primary block" id="syncStartBtn">✨ 새 동기화 시작 (코드 생성)</button>
             <label class="field">다른 기기에서 만든 코드 입력</label>
             <div class="row">
               <input type="text" id="syncCodeInput" placeholder="예: A3F9K2XQ" style="text-transform:uppercase;">
               <button class="btn" id="syncJoinBtn">연결</button>
             </div>
+            <button class="btn block" id="syncNowBtn" style="display:none;">🔄 지금 동기화</button>
             <button class="btn block" id="syncStopBtn" style="display:none;">동기화 끄기</button>
           </div>
         </div>
@@ -2686,7 +2687,6 @@ const firebaseConfig = {
 };
 
 let syncDb = null;
-let syncUnsub = null;
 let syncCode = localStorage.getItem('shiftNoteSyncCode') || null;
 
 function isFirebaseConfigured(){
@@ -2703,17 +2703,21 @@ function ensureFirebaseInit(){
 function renderSyncStatus(){
   const statusEl = document.getElementById('syncStatusText');
   const stopBtn = document.getElementById('syncStopBtn');
+  const nowBtn = document.getElementById('syncNowBtn');
   if(!isFirebaseConfigured()){
     statusEl.textContent = '동기화 기능이 아직 설정되지 않았어요. (개발자 안내 참고)';
     stopBtn.style.display = 'none';
+    nowBtn.style.display = 'none';
     return;
   }
   if(syncCode){
-    statusEl.innerHTML = `🟢 연동됨<div class="sync-code-box">코드: <b>${syncCode}</b></div>다른 기기에서도 이 코드를 입력하면 실시간으로 같이 반영돼요.`;
+    statusEl.innerHTML = `🟢 연동됨<div class="sync-code-box">코드: <b>${syncCode}</b></div>앱을 열 때, 또는 "지금 동기화"를 눌렀을 때만 다른 기기 내용을 가져와요.`;
     stopBtn.style.display = 'block';
+    nowBtn.style.display = 'block';
   } else {
-    statusEl.textContent = '아이폰과 안드로이드에서 같은 코드를 입력하면 실시간으로 데이터가 서로 반영돼요.';
+    statusEl.textContent = '아이폰과 안드로이드에서 같은 코드를 입력하면 데이터가 서로 반영돼요. 앱을 처음 열 때, 또는 "지금 동기화"를 눌렀을 때만 최신 내용을 가져와요.';
     stopBtn.style.display = 'none';
+    nowBtn.style.display = 'none';
   }
 }
 
@@ -2740,10 +2744,18 @@ function buildSyncPayload(){
   };
 }
 
-// 다른 사람에게 "링크로 보여주는" 용도 - 근무표만 보이고, 개인 메모/일정은 제외
+// 다른 사람에게 "링크로 보여주는" 용도 - 근무표만 보이고, 개인 메모/일정과 알람 설정은 제외 (가볍게)
 function buildShareOnlyPayload(){
   const full = buildSyncPayload();
-  return { ...full, notes: {} };
+  const { alarms, ...rest } = full;
+  return { ...rest, notes: {} };
+}
+
+// 내 캘린더 앱 구독용 - 근무표+메모는 포함하되, 알람 설정은 제외 (가볍게)
+function buildCalSubPayload(){
+  const full = buildSyncPayload();
+  const { alarms, ...rest } = full;
+  return rest;
 }
 
 function applyRemoteState(data){
@@ -2788,6 +2800,26 @@ function applyRemoteState(data){
 
 let syncReadyToPush = false; // 재연결 시 클라우드의 진짜 최신 데이터를 받기 전까지는 절대 push하지 않음
 
+async function pullSyncOnce(showToast){
+  if(!ensureFirebaseInit() || !syncCode) return;
+  try{
+    const doc = await syncDb.collection('shiftNoteSync').doc(syncCode).get();
+    syncReadyToPush = true; // 서버로부터 (내용이 있든 없든) 한 번이라도 응답을 받으면, 이제부터는 이 기기가 최신 상태를 아는 것
+    const data = doc.data();
+    if(!data || !data.payload){ if(showToast) showToastMsg('아직 다른 기기의 데이터가 없어요'); return; }
+    const incomingJSON = stableStringify(data.payload);
+    if(incomingJSON === lastSyncedPayloadJSON){
+      if(showToast) showToastMsg('이미 최신 상태예요');
+      return;
+    }
+    lastSyncedPayloadJSON = incomingJSON;
+    applyRemoteState(data.payload);
+    if(showToast) showToastMsg('다른 기기의 변경사항을 가져왔어요');
+  }catch(e){
+    if(showToast) showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요');
+  }
+}
+
 function startSync(code, opts){
   opts = opts || {};
   if(!ensureFirebaseInit()){
@@ -2797,23 +2829,17 @@ function startSync(code, opts){
   syncCode = code.trim().toUpperCase();
   localStorage.setItem('shiftNoteSyncCode', syncCode);
   syncReadyToPush = !!opts.pushInitial; // 새로 코드를 만드는 경우만 바로 push 허용, 참여/재연결은 첫 응답을 받을 때까지 대기
-  if(syncUnsub) syncUnsub();
-  syncUnsub = syncDb.collection('shiftNoteSync').doc(syncCode).onSnapshot((doc)=>{
-    syncReadyToPush = true; // 서버로부터 (내용이 있든 없든) 한 번이라도 응답을 받으면, 이제부터는 이 기기가 최신 상태를 아는 것
-    if(doc.metadata.hasPendingWrites) return; // 내가 방금 쓴, 아직 서버 확인 전인 변경은 무시
-    const data = doc.data();
-    if(!data || !data.payload) return;
-    const incomingJSON = stableStringify(data.payload);
-    if(incomingJSON === lastSyncedPayloadJSON) return; // 내가 보낸 게 그대로 돌아온 것(에코) - 할 일 없음
-    lastSyncedPayloadJSON = incomingJSON;
-    applyRemoteState(data.payload);
-  }, ()=>{ showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요'); });
   renderSyncStatus();
-  // 새로 코드를 "생성"하는 경우에만 지금 내 데이터를 먼저 올림.
-  // 기존 코드에 "참여"/재연결하는 경우는 클라우드에 있는 데이터를 받아오는 게 먼저라 여기서 덮어쓰지 않음.
+  // 새로 코드를 "생성"하는 경우엔 지금 내 데이터를 올리고, 기존 코드에 "참여"하는 경우엔 한 번 받아옴 (실시간 계속 듣지 않고 딱 한 번만)
   if(opts.pushInitial) pushStateToCloud();
+  else pullSyncOnce(false);
   showToastMsg('동기화를 시작했어요');
 }
+
+document.getElementById('syncNowBtn').onclick = ()=>{
+  showToastMsg('동기화하는 중...');
+  pullSyncOnce(true);
+};
 
 function pushStateToCloud(){
   if(!syncDb || !syncCode || !stateReady || !syncReadyToPush) return;
@@ -2866,9 +2892,8 @@ document.getElementById('syncJoinBtn').onclick = ()=>{
   startSync(val, {pushInitial:false});
 };
 document.getElementById('syncStopBtn').onclick = async ()=>{
-  const ok = await showConfirm('동기화를 끄면 이 기기는 더 이상 다른 기기와 실시간으로 연결되지 않아요.\n계속할까요?');
+  const ok = await showConfirm('동기화를 끄면 이 기기는 더 이상 다른 기기와 연결되지 않아요.\n계속할까요?');
   if(!ok) return;
-  if(syncUnsub){ syncUnsub(); syncUnsub = null; }
   showToastMsg('동기화 코드를 정리하는 중...');
   const result = await deleteAllKnownSyncCodes();
   syncCode = null;
@@ -2915,7 +2940,8 @@ function pushStateToShare(){
   if(payloadJSON === lastSharedPayloadJSON) return;
   lastSharedPayloadJSON = payloadJSON;
   syncDb.collection('shiftNoteShare').doc(shareCode).set({
-    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    kind: 'share_link', label: '🔗 링크로 공유 (다른 사람에게 보여주는 용도, 근무표만)'
   }).catch(()=>{});
 }
 async function deleteAllKnownShareCodes(){
@@ -3002,12 +3028,13 @@ function renderCalSubStatus(){
 let lastCalSubPayloadJSON = null;
 function pushStateToCalSub(){
   if(!calSubCode || !stateReady || !ensureFirebaseInit()) return;
-  const payload = buildSyncPayload(); // 근무표 + 메모 전부
+  const payload = buildCalSubPayload(); // 근무표 + 메모 (알람 설정은 제외, 가볍게)
   const payloadJSON = stableStringify(payload);
   if(payloadJSON === lastCalSubPayloadJSON) return;
   lastCalSubPayloadJSON = payloadJSON;
   syncDb.collection('shiftNoteShare').doc(calSubCode).set({
-    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    kind: 'calendar_subscription', label: '📅 캘린더 구독 (내 캘린더 앱용, 근무표+메모)'
   }).catch(()=>{});
 }
 async function deleteAllKnownCalSubCodes(){
