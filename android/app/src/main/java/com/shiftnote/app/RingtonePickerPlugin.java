@@ -82,6 +82,8 @@ public class RingtonePickerPlugin extends Plugin {
         String channelId = call.getString("channelId");
         String channelName = call.getString("channelName", "교대노트 알람");
         String uriString = call.getString("uri");
+        // 같은 근무유형의 예전 채널들(baseId 또는 baseId_xxx)을 정리하기 위한 기준 id
+        String baseId = call.getString("baseId");
 
         if (channelId == null || uriString == null) {
             call.reject("channelId와 uri가 필요합니다");
@@ -92,10 +94,12 @@ public class RingtonePickerPlugin extends Plugin {
             Context context = getContext();
             NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
-            // 같은 id로 이미 채널이 있으면 소리를 바꿀 수 없으므로(안드로이드 제약) 지우고 새로 만든다.
-            NotificationChannel existing = manager.getNotificationChannel(channelId);
-            if (existing != null) {
-                manager.deleteNotificationChannel(channelId);
+            // 안드로이드는 채널을 지웠다가 같은 id로 다시 만들면 "예전 설정(소리 포함)"을 그대로 되살린다.
+            // 그래서 소리마다 다른 channelId를 쓰고(JS에서 URI 해시를 붙여 만듦), 이미 있으면 그대로 둔다.
+            if (manager.getNotificationChannel(channelId) != null) {
+                cleanupOldCustomChannels(manager, baseId, channelId);
+                call.resolve();
+                return;
             }
 
             NotificationChannel channel = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
@@ -116,9 +120,20 @@ public class RingtonePickerPlugin extends Plugin {
             }
 
             manager.createNotificationChannel(channel);
+            cleanupOldCustomChannels(manager, baseId, channelId);
         }
 
         call.resolve();
+    }
+
+    private void cleanupOldCustomChannels(NotificationManager manager, String baseId, String keepId) {
+        if (baseId == null || baseId.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        for (NotificationChannel ch : manager.getNotificationChannels()) {
+            String id = ch.getId();
+            if (!id.equals(keepId) && (id.equals(baseId) || id.startsWith(baseId + "_"))) {
+                manager.deleteNotificationChannel(id);
+            }
+        }
     }
 
     /**
@@ -130,6 +145,7 @@ public class RingtonePickerPlugin extends Plugin {
         String range = call.getString("range", "");
         String team = call.getString("team", "");
         String color = call.getString("color", "#6C7BFF");
+        JSObject days = call.getObject("days");
 
         Context context = getContext();
         SharedPreferences prefs = context.getSharedPreferences(ShiftWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
@@ -138,7 +154,8 @@ public class RingtonePickerPlugin extends Plugin {
             .putString(ShiftWidgetProvider.PREF_RANGE, range)
             .putString(ShiftWidgetProvider.PREF_TEAM, team)
             .putString(ShiftWidgetProvider.PREF_COLOR, color)
-            .apply();
+            .putString(ShiftWidgetProvider.PREF_DAYS, days != null ? days.toString() : "{}")
+            .commit();
 
         ShiftWidgetProvider.updateAll(context);
         call.resolve();
@@ -152,15 +169,40 @@ public class RingtonePickerPlugin extends Plugin {
     public void updateCalendarWidget(PluginCall call) {
         String title = call.getString("title", "");
         com.getcapacitor.JSArray cells = call.getArray("cells");
+        JSObject months = call.getObject("months");
 
         Context context = getContext();
         SharedPreferences prefs = context.getSharedPreferences(ShiftCalendarWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit()
             .putString(ShiftCalendarWidgetProvider.PREF_TITLE, title)
             .putString(ShiftCalendarWidgetProvider.PREF_CELLS, cells != null ? cells.toString() : "[]")
-            .apply();
+            .putString(ShiftCalendarWidgetProvider.PREF_MONTHS, months != null ? months.toString() : "{}")
+            .commit();
 
         ShiftCalendarWidgetProvider.updateAll(context);
+        call.resolve();
+    }
+
+    /**
+     * 4x1 메모/일정 위젯 갱신 (예전엔 JS가 이 메서드를 불렀지만 네이티브에 없어서 위젯이 항상 "일정 없음"이었음)
+     * today/upcoming: 지금 기준으로 계산된 문자열, items: 날짜가 바뀌어도 다시 계산할 수 있도록 넘기는 메모 목록
+     */
+    @PluginMethod
+    public void updateNotesWidget(PluginCall call) {
+        String today = call.getString("today", "일정 없음");
+        String upcoming = call.getString("upcoming", "일정 없음");
+        com.getcapacitor.JSArray items = call.getArray("items");
+
+        Context context = getContext();
+        SharedPreferences prefs = context.getSharedPreferences(ShiftNotesWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit()
+            .putString(ShiftNotesWidgetProvider.PREF_TODAY, today)
+            .putString(ShiftNotesWidgetProvider.PREF_UPCOMING, upcoming);
+        if (items != null) editor.putString(ShiftNotesWidgetProvider.PREF_ITEMS, items.toString());
+        else editor.remove(ShiftNotesWidgetProvider.PREF_ITEMS);
+        editor.commit();
+
+        ShiftNotesWidgetProvider.updateAll(context);
         call.resolve();
     }
 
@@ -184,10 +226,9 @@ public class RingtonePickerPlugin extends Plugin {
                 String channelName = "교대노트 알람 · " + presetNames[i];
                 String resName = "alarm_" + presetIds[i];
 
-                NotificationChannel existing = manager.getNotificationChannel(channelId);
-                if (existing != null) {
-                    manager.deleteNotificationChannel(channelId);
-                }
+                // 이미 있으면 그대로 둔다 (지웠다 다시 만들어도 안드로이드가 예전 설정을 되살리므로 의미가 없고,
+                // 사용자가 시스템 설정에서 바꾼 값을 존중하기 위함)
+                if (manager.getNotificationChannel(channelId) != null) continue;
 
                 NotificationChannel channel = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
                 channel.enableVibration(true);

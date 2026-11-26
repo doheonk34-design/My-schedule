@@ -14,6 +14,18 @@ public class ShiftCalendarWidgetProvider extends AppWidgetProvider {
     public static final String PREFS_NAME = "com.shiftnote.app.calendarWidget";
     public static final String PREF_TITLE = "title";
     public static final String PREF_CELLS = "cells"; // JSON 배열, [{day, label, labelColor, today, dots:[...]}]
+    /** 월별 데이터 JSON: {"YYYY-MM": {title, cells}} - 앱을 안 열어도 달이 바뀌면 새 달을 보여주기 위함 */
+    public static final String PREF_MONTHS = "months";
+
+    /** 지금 날짜에 맞는 월 데이터. 없으면 null */
+    static org.json.JSONObject currentMonth(SharedPreferences prefs) {
+        try {
+            org.json.JSONObject months = new org.json.JSONObject(prefs.getString(PREF_MONTHS, "{}"));
+            return months.optJSONObject(ShiftWidgetProvider.todayIso().substring(0, 7));
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     /** JS 쪽에서 데이터가 바뀔 때마다 호출: 저장 + 화면에 붙은 모든 달력 위젯을 즉시 갱신 */
     public static void updateAll(Context context) {
@@ -35,11 +47,15 @@ public class ShiftCalendarWidgetProvider extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             updateOne(context, appWidgetManager, id);
         }
+        // 30분마다 호출될 때 칸도 다시 그려서, 자정이 지나면 "오늘" 표시가 옮겨가고 달이 바뀌면 새 달로 바뀜
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.cal_grid);
     }
 
     private void updateOne(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String title = prefs.getString(PREF_TITLE, "");
+        org.json.JSONObject month = currentMonth(prefs);
+        if (month != null) title = month.optString("title", title);
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.shift_calendar_widget);
         views.setTextViewText(R.id.cal_widget_title, title);

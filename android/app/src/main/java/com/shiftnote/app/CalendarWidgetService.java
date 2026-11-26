@@ -19,6 +19,8 @@ public class CalendarWidgetService extends RemoteViewsService {
 class CalendarRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
     private final Context context;
     private JSONArray cells = new JSONArray();
+    private String todayDay = "";
+    private boolean fromMonths = false;
 
     CalendarRemoteViewsFactory(Context context) {
         this.context = context;
@@ -36,6 +38,14 @@ class CalendarRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactor
 
     private void loadData() {
         SharedPreferences prefs = context.getSharedPreferences(ShiftCalendarWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
+        String iso = ShiftWidgetProvider.todayIso();
+        todayDay = String.valueOf(Integer.parseInt(iso.substring(8, 10)));
+        JSONObject month = ShiftCalendarWidgetProvider.currentMonth(prefs);
+        fromMonths = month != null && month.optJSONArray("cells") != null;
+        if (fromMonths) {
+            cells = month.optJSONArray("cells");
+            return;
+        }
         try {
             cells = new JSONArray(prefs.getString(ShiftCalendarWidgetProvider.PREF_CELLS, "[]"));
         } catch (Exception e) {
@@ -68,7 +78,8 @@ class CalendarRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactor
         String day = cell.optString("day", "");
         String label = cell.optString("label", "");
         String labelColor = cell.optString("labelColor", "");
-        boolean today = cell.optBoolean("today", false);
+        // 월별 데이터에서는 "오늘"을 저장 시점이 아닌 지금 날짜로 판단
+        boolean today = fromMonths ? (!day.isEmpty() && day.equals(todayDay)) : cell.optBoolean("today", false);
         boolean red = cell.optBoolean("red", false);
         JSONArray dots = cell.optJSONArray("dots");
 

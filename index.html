@@ -534,8 +534,29 @@
           <div class="card-body">
             <p class="subtext">안드로이드 앱(APK)에서는 근무표에 맞춰 실제 알람이 울려요. <b style="color:var(--text);">앱을 완전히 꺼놔도 울려요</b> (백그라운드 실행 필요 없음). 웹 화면에서는 미리듣기만 가능해요. 반복 횟수를 정하면 3분 간격으로 다시 울려요.</p>
             <div id="permStatusBox" style="display:none;"></div>
+            <div id="iosAlarmNotice" class="subtext" style="display:none; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px;">📱 아이폰에서는 웹앱이 알람을 직접 울릴 수 없어요. 여기서 시간을 정한 뒤, 아래 <b>아이폰 시계 알람 연동</b>을 켜고 단축어를 설정하면 아이폰 기본 시계 앱 알람이 근무표에 맞춰 자동으로 켜져요.</div>
             <div id="alarmList"></div>
             <button class="btn block" id="testAlarm">🔔 지금 테스트</button>
+
+            <div style="border-top:1px solid var(--border); padding-top:14px; margin-top:14px;">
+              <div style="font-weight:700; font-size:13px; margin-bottom:6px;">📱 아이폰 시계 알람 연동 (단축어)</div>
+              <p class="subtext" id="iphoneAlarmStatusText" style="margin-top:0;">아이폰 단축어 자동화가 매일 이 주소를 읽어서, 그날 근무에 맞는 시계 앱 알람만 켜요. 시계 앱 알람이라 무음 모드에서도 울려요.</p>
+              <button class="btn primary block" id="iphoneAlarmCreateBtn">아이폰 알람 연동 켜기</button>
+              <div id="iphoneAlarmBox" style="display:none;">
+                <label class="field">단축어에 넣을 주소</label>
+                <div class="row">
+                  <input type="text" id="iphoneAlarmUrlInput" readonly>
+                  <button class="btn" id="iphoneAlarmCopyBtn">복사</button>
+                </div>
+                <label class="field">시계 앱에 미리 만들어 둘 알람 (레이블을 똑같이)</label>
+                <div id="iphoneAlarmLabels" class="subtext" style="margin-top:0;"></div>
+                <p class="subtext">설정 방법은 저장소의 <b>IPHONE_ALARM.md</b> 안내를 참고하세요. 앱(아이폰·안드로이드 어느 쪽이든)을 60일 이상 안 열면 그 뒤로는 알람이 켜지지 않아요.</p>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn" id="iphoneAlarmRegenBtn">🔄 새 주소 만들기</button>
+                  <button class="btn" id="iphoneAlarmOffBtn">연동 끄기</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -881,7 +902,9 @@ const state = {
   calSubCodeHistory: [],
   calSubMemoCode: null,     // 구독 캘린더 - 메모 전용 코드 (근무표 제외) - 근무표 코드와 완전히 별개
   calSubMemoCodeHistory: [],
-  syncCodeHistory: []       // 기기간 동기화 코드도 새로 만들 때마다 예전 코드가 서버에 안 남게 기록
+  syncCodeHistory: [],      // 기기간 동기화 코드도 새로 만들 때마다 예전 코드가 서버에 안 남게 기록
+  iphoneAlarmCode: null,    // 아이폰 단축어용 알람 계획 문서 코드
+  iphoneAlarmCodeHistory: []
 };
 
 // ================= DATE HELPERS =================
@@ -893,6 +916,76 @@ function sameDay(a,b){ return isoDate(a)===isoDate(b); }
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+// 'YYYY-MM-DD' → 로컬 자정 Date.
+// (new Date('YYYY-MM-DD')는 UTC 자정으로 해석돼서, 한국보다 늦은 시간대에서는 하루 전 날짜가 됨)
+function parseIsoDate(s){
+  if(s instanceof Date) return isNaN(s) ? null : startOfDay(s);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s||''));
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : startOfDay(d);
+}
+
+// ================= 불러온 데이터 검증 (백업 파일 / 동기화 / 공유 데이터는 외부 입력으로 취급) =================
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+function isPlainObj(o){ return !!o && typeof o==='object' && !Array.isArray(o); }
+function maxSeqOf(ids, prefix){
+  const re = new RegExp('^'+prefix+'(\\d+)$');
+  return ids.reduce((m,id)=>{ const mm = re.exec(String(id||'')); return mm ? Math.max(m, +mm[1]) : m; }, 0);
+}
+// 새 근무유형/조/메모 id가 기존 것과 겹치지 않도록, 저장된 데이터의 최댓값 다음부터 이어서 발급
+function resyncIdSequences(){
+  shiftTypeSeq = Math.max(4, maxSeqOf(state.shiftTypes.map(s=>s.id), 'st'));
+  teamSeq = Math.max(4, maxSeqOf(state.teams.map(t=>t.id), 'tm'));
+  const noteIds = [];
+  Object.values(state.notes).forEach(list=> list.forEach(n=> noteIds.push(n.id)));
+  noteSeq = maxSeqOf(noteIds, 'note');
+  // 예전 버전 버그로 이미 중복된 메모 id가 있으면 새 id로 바꿔줌 (하나 지울 때 같이 지워지는 문제 방지)
+  const seen = new Set();
+  Object.values(state.notes).forEach(list=> list.forEach(n=>{
+    if(!n.id || seen.has(n.id)) n.id = 'note'+(++noteSeq);
+    seen.add(n.id);
+  }));
+}
+function sanitizeState(){
+  state.shiftTypes = (Array.isArray(state.shiftTypes) ? state.shiftTypes : [])
+    .filter(st=> isPlainObj(st) && typeof st.id==='string' && st.id)
+    .map(st=>{
+      st.name = st.name==null ? '' : String(st.name);
+      if(st.color && !HEX_COLOR_RE.test(st.color)) delete st.color;
+      return st;
+    });
+  state.teams = (Array.isArray(state.teams) ? state.teams : [])
+    .filter(t=> isPlainObj(t) && typeof t.id==='string' && t.id)
+    .map(t=>{
+      t.name = t.name==null ? '' : String(t.name);
+      t.sequence = Array.isArray(t.sequence) ? t.sequence.filter(id=> typeof id==='string') : [];
+      return t;
+    });
+  if(!state.teams.length) state.teams = [{id:'tm1', name:'1조', sequence:[]}];
+  if(!state.teams.some(t=>t.id===state.myTeamId)) state.myTeamId = state.teams[0].id;
+  ['shiftTimes','alarms','overrides','notes','otherColorMap'].forEach(k=>{ if(!isPlainObj(state[k])) state[k] = {}; });
+  Object.keys(state.otherColorMap).forEach(k=>{ if(!HEX_COLOR_RE.test(state.otherColorMap[k])) delete state.otherColorMap[k]; });
+  Object.keys(state.overrides).forEach(iso=>{
+    const ov = state.overrides[iso];
+    if(!isPlainObj(ov)){ delete state.overrides[iso]; return; }
+    Object.keys(ov).forEach(tid=>{ if(typeof ov[tid]!=='string') delete ov[tid]; });
+  });
+  Object.keys(state.notes).forEach(iso=>{
+    const list = state.notes[iso];
+    if(!Array.isArray(list)){ delete state.notes[iso]; return; }
+    state.notes[iso] = list.filter(isPlainObj).map(n=>({
+      ...n,
+      id: typeof n.id==='string' ? n.id : '',
+      time: typeof n.time==='string' ? n.time : null,
+      text: n.text==null ? '' : String(n.text)
+    }));
+    if(!state.notes[iso].length) delete state.notes[iso];
+  });
+  Object.keys(state.alarms).forEach(k=>{ if(!isPlainObj(state.alarms[k])) delete state.alarms[k]; });
+  resyncIdSequences();
 }
 
 // ================= CUSTOM TIME PICKER (박스 아무곳이나 클릭 → 팝오버, 분 선택시 자동 닫힘) =================
@@ -1086,7 +1179,7 @@ function renderShiftTypeRows(){
     row.innerHTML = `
       <div class="preset-toggle-row">
         <div class="toggle ${st.enabled?'on':''}"><i></i></div>
-        <span class="preset-caption">${PRESET_CAPTIONS[st.id] || st.name}</span>
+        <span class="preset-caption">${escapeHtml(PRESET_CAPTIONS[st.id] || st.name)}</span>
         <input type="color" class="st-color" value="${colorForShiftType(st)}">
       </div>
       <div class="st-time-row">
@@ -1130,7 +1223,7 @@ function renderShiftTypeRows(){
     row.innerHTML = `
       <div class="shift-type-row">
         <input type="color" class="st-color" value="${colorForShiftType(st)}">
-        <input type="text" class="st-name" value="${st.name.replace(/"/g,'&quot;')}" placeholder="예: 특근">
+        <input type="text" class="st-name" value="${escapeHtml(st.name)}" placeholder="예: 특근">
         <select class="st-role">
           <option value="day">주간</option>
           <option value="night">야간</option>
@@ -1192,17 +1285,17 @@ function teamBlockHTML(team){
     ? team.sequence.map((stId,i)=>{
         const st=getShiftType(stId);
         const hidden = !isTypeUsable(st);
-        return `<span class="tb-chip${hidden?' tb-chip-hidden':''}" style="background:${colorForShiftType(st)}" data-index="${i}" data-stid="${stId}" title="탭하여 삭제 · 드래그로 순서 변경">${st.name}</span>`;
+        return `<span class="tb-chip${hidden?' tb-chip-hidden':''}" style="background:${colorForShiftType(st)}" data-index="${i}" data-stid="${escapeHtml(stId)}" title="탭하여 삭제 · 드래그로 순서 변경">${escapeHtml(st.name)}</span>`;
       }).join('')
     : `<span class="tb-empty">아래 근무 유형 아이콘을 눌러 순서대로 추가하세요 (칩은 드래그로 순서 변경 가능)</span>`;
   const pickerHtml = state.shiftTypes.filter(isTypeUsable).map(st=>{
     const c = colorForShiftType(st);
-    return `<button class="tb-add-btn" style="border-color:${c}88;color:${c};" data-stid="${st.id}">+ ${st.name}</button>`;
+    return `<button class="tb-add-btn" style="border-color:${c}88;color:${c};" data-stid="${escapeHtml(st.id)}">+ ${escapeHtml(st.name)}</button>`;
   }).join('');
   const isMine = team.id===state.myTeamId;
   return `
     <div class="tb-header">
-      <input type="text" class="tb-name" value="${team.name.replace(/"/g,'&quot;')}" placeholder="예: 1조, A파트">
+      <input type="text" class="tb-name" value="${escapeHtml(team.name)}" placeholder="예: 1조, A파트">
       <button class="tb-remove" title="이 조 삭제">✕</button>
     </div>
     <div class="tb-sequence">${seqHtml}</div>
@@ -1372,7 +1465,7 @@ function renderLegend(){
   el.innerHTML='';
   state.shiftTypes.filter(isTypeUsable).forEach(st=>{
     const s=document.createElement('span');
-    s.innerHTML = `<i style="background:${colorForShiftType(st)}"></i>${st.name}`;
+    s.innerHTML = `<i style="background:${colorForShiftType(st)}"></i>${escapeHtml(st.name)}`;
     el.appendChild(s);
   });
 }
@@ -1407,10 +1500,10 @@ function buildDayCellEl(date, interactive){
   cell.innerHTML = `
     ${numHtml}
     <div class="mylabel-row">
-      <span class="mylabel" style="color:${mine.color}">${mine.label}</span>
+      <span class="mylabel" style="color:${mine.color}">${escapeHtml(mine.label)}</span>
     </div>
     ${noteHtml}
-    <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${d.label}"></i>`).join('')}</div>
+    <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${escapeHtml(d.label)}"></i>`).join('')}</div>
   `;
   if(interactive){
     cell.onclick = ()=>{
@@ -1743,7 +1836,7 @@ function renderAlarmList(){
     wrap.innerHTML = `
       <div class="alarm-row">
         <span class="swatch" style="background:${color}"></span>
-        <span class="name">${st.name}</span>
+        <span class="name">${escapeHtml(st.name)}</span>
         <div class="time-slot"></div>
         <div class="toggle ${a.enabled?'on':''}"><i></i></div>
       </div>
@@ -1751,7 +1844,7 @@ function renderAlarmList(){
         <span class="alarm-sound-caption">🔔 알림음</span>
         <select class="alarm-sound-select">
           ${ALARM_SOUNDS.map(s=>`<option value="${s.id}" ${s.id===a.sound?'selected':''}>${s.name}</option>`).join('')}
-          ${CAP_NATIVE ? `<option value="custom" ${isCustom?'selected':''}>📂 내 폰 소리에서 선택${isCustom && a.customName ? ' — '+a.customName : ''}</option>` : ''}
+          ${CAP_NATIVE ? `<option value="custom" ${isCustom?'selected':''}>📂 내 폰 소리에서 선택${isCustom && a.customName ? ' — '+escapeHtml(a.customName) : ''}</option>` : ''}
         </select>
         <button class="btn small alarm-sound-preview" title="미리듣기">▶</button>
       </div>
@@ -1834,7 +1927,16 @@ const CAP_NATIVE = (typeof Capacitor !== 'undefined') && !!(Capacitor.isNativePl
 const LocalNotificationsPlugin = (typeof Capacitor !== 'undefined' && Capacitor.Plugins) ? Capacitor.Plugins.LocalNotifications : null;
 const RingtonePickerPlugin = (typeof Capacitor !== 'undefined' && Capacitor.Plugins) ? Capacitor.Plugins.RingtonePicker : null;
 
-function customChannelIdFor(shiftTypeId){ return 'alarm_custom_'+shiftTypeId; }
+// 안드로이드는 같은 id로 채널을 지웠다 다시 만들면 예전 소리를 되살리므로, 소리(URI)마다 다른 채널 id를 쓴다.
+function customChannelBaseFor(shiftTypeId){ return 'alarm_custom_'+shiftTypeId; }
+function shortHash(str){
+  let h = 5381;
+  for(let i=0;i<str.length;i++) h = ((h<<5)+h+str.charCodeAt(i))|0;
+  return (h>>>0).toString(36);
+}
+function customChannelIdFor(shiftTypeId, uri){
+  return customChannelBaseFor(shiftTypeId)+'_'+shortHash(String(uri||''));
+}
 
 async function pickCustomRingtoneFor(st, alarmObj){
   if(!CAP_NATIVE || !RingtonePickerPlugin){ showToastMsg('이 기능은 안드로이드 앱에서만 사용할 수 있어요'); return; }
@@ -1842,7 +1944,8 @@ async function pickCustomRingtoneFor(st, alarmObj){
     const result = await RingtonePickerPlugin.pickRingtone();
     if(result.cancelled || !result.uri) return;
     await RingtonePickerPlugin.createCustomSoundChannel({
-      channelId: customChannelIdFor(st.id),
+      channelId: customChannelIdFor(st.id, result.uri),
+      baseId: customChannelBaseFor(st.id),
       channelName: '교대노트 알람 · '+st.name,
       uri: result.uri
     });
@@ -1875,7 +1978,8 @@ async function setupNotificationChannels(){
       if(a && a.sound==='custom' && a.customUri){
         try{
           await RingtonePickerPlugin.createCustomSoundChannel({
-            channelId: customChannelIdFor(st.id),
+            channelId: customChannelIdFor(st.id, a.customUri),
+            baseId: customChannelBaseFor(st.id),
             channelName: '교대노트 알람 · '+st.name,
             uri: a.customUri
           });
@@ -1894,21 +1998,37 @@ function updateNativeWidget(){
     const team = state.teams.find(tt=>tt.id===state.myTeamId);
     const matched = state.shiftTypes.find(st=>st.name===t.label);
     const times = matched ? state.shiftTimes[matched.id] : null;
+    const days = {};
+    for(let i=0;i<WIDGET_DAYS_AHEAD;i++){
+      const date = addDays(startOfDay(now), i);
+      const s = shiftForTeamOnDate(date, state.myTeamId);
+      const st = state.shiftTypes.find(x=>x.name===s.label);
+      const tm = st ? state.shiftTimes[st.id] : null;
+      days[isoDate(date)] = {
+        label: s.label || '-',
+        range: (tm && tm.start) ? (tm.start+'–'+tm.end) : '',
+        color: s.color || '#6C7BFF'
+      };
+    }
     RingtonePickerPlugin.updateWidget({
       label: t.label || '-',
       range: (times && times.start) ? (times.start+'–'+times.end) : '',
       team: team ? team.name : '',
-      color: t.color || '#6C7BFF'
-    });
+      color: t.color || '#6C7BFF',
+      days
+    }).catch(()=>{});
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
   updateNativeCalendarWidget();
   updateNativeNotesWidget();
 }
 
-// ---- 4x4 달력 위젯: 이번달 전체를 6주 x 7일(42칸)로 계산해서 전달 ----
-function computeCalendarWidgetCells(){
+const WIDGET_DAYS_AHEAD = 60; // 앱을 안 열어도 위젯이 날짜에 맞게 바뀌도록 60일치를 미리 넘겨둠
+
+// ---- 4x4 달력 위젯: 한 달 전체를 6주 x 7일(42칸)로 계산해서 전달 ----
+function computeCalendarWidgetCells(year, month){
   const now = new Date();
-  const y = now.getFullYear(), m = now.getMonth();
+  const y = year===undefined ? now.getFullYear() : year;
+  const m = month===undefined ? now.getMonth() : month;
   const first = new Date(y,m,1);
   const startOffset = first.getDay();
   const daysInMonth = new Date(y,m+1,0).getDate();
@@ -1937,7 +2057,14 @@ function updateNativeCalendarWidget(){
   if(!CAP_NATIVE || !RingtonePickerPlugin) return;
   try{
     const {title, cells} = computeCalendarWidgetCells();
-    RingtonePickerPlugin.updateCalendarWidget({title, cells});
+    // 이번 달 + 다음 두 달: 달이 바뀌면 네이티브가 새 달 데이터를 골라 보여줌
+    const months = {};
+    const now = new Date();
+    for(let k=0;k<3;k++){
+      const d = new Date(now.getFullYear(), now.getMonth()+k, 1);
+      months[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')] = computeCalendarWidgetCells(d.getFullYear(), d.getMonth());
+    }
+    RingtonePickerPlugin.updateCalendarWidget({title, cells, months}).catch(()=>{});
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
 }
 
@@ -1972,13 +2099,37 @@ function updateNativeNotesWidget(){
   if(!CAP_NATIVE || !RingtonePickerPlugin) return;
   try{
     const cols = computeNotesWidgetColumns();
-    RingtonePickerPlugin.updateNotesWidget(cols);
+    // 오늘 이후 메모 목록도 함께 넘겨서, 날짜가 바뀌면 네이티브가 오늘/다가오는 일정을 다시 계산
+    const todayISO = isoDate(new Date());
+    const items = [];
+    Object.keys(state.notes).filter(iso=> iso >= todayISO).sort().forEach(iso=>{
+      getNotesForDate(parseIsoDate(iso)).forEach(n=>{
+        if(items.length < 200) items.push({date: iso, time: n.time || '', text: n.text});
+      });
+    });
+    RingtonePickerPlugin.updateNotesWidget({...cols, items}).catch(()=>{});
   }catch(e){ /* 네이티브가 아니면 조용히 무시 */ }
 }
 
 const ALARM_ID_BASE = 100000;
-async function rescheduleLocalAlarms(){
+const ALARM_DAYS_AHEAD = 60; // 앞으로 60일치 예약 (반복 최대 5회 x 60일 = 300건 → 안드로이드 앱당 알람 한도 500건 이내)
+let alarmRescheduleChain = Promise.resolve();
+let alarmRescheduleTimer = null;
+let lastAlarmSummary = null;
+let lastAlarmRescheduleAt = 0;
+// 여러 곳에서 연달아 호출돼도 300ms 안의 호출은 한 번으로 합치고, 실행은 하나씩 순서대로(취소/예약이 섞이지 않게)
+function rescheduleLocalAlarms(){
+  if(!CAP_NATIVE || !LocalNotificationsPlugin) return Promise.resolve();
+  return new Promise(resolve=>{
+    clearTimeout(alarmRescheduleTimer);
+    alarmRescheduleTimer = setTimeout(()=>{
+      alarmRescheduleChain = alarmRescheduleChain.then(doRescheduleLocalAlarms).catch(()=>{}).then(resolve);
+    }, 300);
+  });
+}
+async function doRescheduleLocalAlarms(){
   if(!CAP_NATIVE || !LocalNotificationsPlugin) return;
+  lastAlarmRescheduleAt = Date.now();
   try{
     const pending = await LocalNotificationsPlugin.getPending();
     if(pending.notifications && pending.notifications.length){
@@ -1988,7 +2139,7 @@ async function rescheduleLocalAlarms(){
     const notifications = [];
     let idCounter = ALARM_ID_BASE;
     const now = new Date();
-    const DAYS_AHEAD = 21; // 앞으로 3주치 근무를 미리 계산해서 예약
+    const DAYS_AHEAD = ALARM_DAYS_AHEAD;
 
     for(let d=0; d<DAYS_AHEAD; d++){
       const date = addDays(startOfDay(now), d);
@@ -2005,7 +2156,7 @@ async function rescheduleLocalAlarms(){
 
       const repeatCount = a.repeat || 1;
       const isCustom = a.sound === 'custom' && a.customUri;
-      const channelId = isCustom ? customChannelIdFor(matched.id) : 'alarm_'+(a.sound||'classic');
+      const channelId = isCustom ? customChannelIdFor(matched.id, a.customUri) : 'alarm_'+(a.sound||'classic');
       const soundFile = isCustom ? undefined : (a.sound||'classic')+'.wav';
 
       for(let r=0; r<repeatCount; r++){
@@ -2022,17 +2173,42 @@ async function rescheduleLocalAlarms(){
       }
     }
 
+    const alarmCount = notifications.length;
+    // 예약 기간이 끝나기 직전에 "앱을 한 번 열어달라"는 알림 (앱을 오래 안 열면 알람이 끊기는 것 방지)
+    if(alarmCount>0){
+      const remindAt = addDays(startOfDay(now), DAYS_AHEAD-3);
+      remindAt.setHours(20,0,0,0);
+      notifications.push({
+        id: idCounter++,
+        title: '교대노트',
+        body: '알람 예약이 3일 뒤 끝나요. 앱을 한 번 열면 다시 예약돼요.',
+        schedule: { at: remindAt }
+      });
+    }
+
     const chunkSize = 50;
     for(let i=0;i<notifications.length;i+=chunkSize){
       await LocalNotificationsPlugin.schedule({ notifications: notifications.slice(i,i+chunkSize) });
     }
-    if(notifications.length>0){
-      const nextOne = notifications[0];
-      const nextTime = new Date(nextOne.schedule.at);
-      showToastMsg(`⏰ 알람 ${notifications.length}건 예약됨 (다음: ${nextTime.getMonth()+1}/${nextTime.getDate()} ${String(nextTime.getHours()).padStart(2,'0')}:${String(nextTime.getMinutes()).padStart(2,'0')})`);
+    // 예약 내용이 실제로 바뀌었을 때만 안내 (앱 시작/설정 저장 때마다 뜨면서 다른 안내를 덮던 문제)
+    const summary = alarmCount>0 ? `${alarmCount}|${notifications[0].schedule.at.getTime()}` : '0';
+    if(lastAlarmSummary!==null && summary!==lastAlarmSummary){
+      if(alarmCount>0){
+        const nextTime = new Date(notifications[0].schedule.at);
+        showToastMsg(`⏰ 알람 ${alarmCount}건 예약됨 (다음: ${nextTime.getMonth()+1}/${nextTime.getDate()} ${String(nextTime.getHours()).padStart(2,'0')}:${String(nextTime.getMinutes()).padStart(2,'0')})`);
+      } else {
+        showToastMsg('예약된 알람이 없어요');
+      }
     }
+    lastAlarmSummary = summary;
   }catch(e){ /* 네이티브가 아니거나 권한이 없으면 조용히 무시 */ }
 }
+// 앱을 오래 켜둔 채(백그라운드) 날짜가 지나도, 다시 볼 때 알람·위젯을 새로 계산
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState!=='visible' || !stateReady || VIEW_SHARE_CODE) return;
+  if(Date.now()-lastAlarmRescheduleAt > 6*3600*1000) rescheduleLocalAlarms();
+  updateNativeWidget();
+});
 
 document.getElementById('testAlarm').onclick = ()=>{
   const enabledIds = Object.keys(state.alarms).filter(id=>state.alarms[id].enabled);
@@ -2473,9 +2649,9 @@ function renderModalTeamSelect(){
     const row = document.createElement('div');
     row.className='modal-team-row';
     row.innerHTML = `
-      <span class="tname">${myTeam.name} <span style="color:var(--sub);font-weight:400;">(나의 근무조)</span></span>
-      <select data-team="${myTeam.id}">
-        ${labels.map(l=>`<option value="${l}" ${l===current?'selected':''}>${l}</option>`).join('')}
+      <span class="tname">${escapeHtml(myTeam.name)} <span style="color:var(--sub);font-weight:400;">(나의 근무조)</span></span>
+      <select data-team="${escapeHtml(myTeam.id)}">
+        ${labels.map(l=>`<option value="${escapeHtml(l)}" ${l===current?'selected':''}>${escapeHtml(l)}</option>`).join('')}
       </select>
     `;
     row.querySelector('select').onchange = (e)=>{
@@ -2492,10 +2668,17 @@ function renderModalTeamSelect(){
 }
 
 // 팝업 안에서 날짜를 바꿨을 때: 그 새 날짜 기준으로 팀선택/메모목록을 다시 그림
+// 팝업이 열려 있는 동안 건드린 모든 날짜의 원래 값을 기억 (날짜를 옮겨가며 바꾼 뒤 취소해도 전부 되돌리기 위함)
+let modalOverrideSnapshots = {};
+function rememberModalOverride(iso){
+  if(iso in modalOverrideSnapshots) return;
+  modalOverrideSnapshots[iso] = state.overrides[iso] ? state.overrides[iso][state.myTeamId] : undefined;
+}
 function retargetModal(newDate){
   modalDate = newDate;
   const iso = isoDate(modalDate);
   modalOverrideSnapshot = state.overrides[iso] ? state.overrides[iso][state.myTeamId] : undefined;
+  rememberModalOverride(iso);
   renderModalTeamSelect();
   renderModalNotes();
   renderModalDateResolved();
@@ -2505,6 +2688,8 @@ function openEditModal(date){
   modalDate = date;
   const iso = isoDate(date);
   modalOverrideSnapshot = state.overrides[iso] ? state.overrides[iso][state.myTeamId] : undefined;
+  modalOverrideSnapshots = {};
+  rememberModalOverride(iso);
 
   const solarInput = document.getElementById('modalDateSolarInput');
   solarInput.min = solarPickerMinDate();
@@ -2521,16 +2706,19 @@ function openEditModal(date){
 
 
 function revertModalOverride(){
-  const iso = isoDate(modalDate);
-  if(modalOverrideSnapshot === undefined){
-    if(state.overrides[iso]){
-      delete state.overrides[iso][state.myTeamId];
-      if(Object.keys(state.overrides[iso]).length===0) delete state.overrides[iso];
+  Object.keys(modalOverrideSnapshots).forEach(iso=>{
+    const snap = modalOverrideSnapshots[iso];
+    if(snap === undefined){
+      if(state.overrides[iso]){
+        delete state.overrides[iso][state.myTeamId];
+        if(Object.keys(state.overrides[iso]).length===0) delete state.overrides[iso];
+      }
+    } else {
+      if(!state.overrides[iso]) state.overrides[iso] = {};
+      state.overrides[iso][state.myTeamId] = snap;
     }
-  } else {
-    if(!state.overrides[iso]) state.overrides[iso] = {};
-    state.overrides[iso][state.myTeamId] = modalOverrideSnapshot;
-  }
+  });
+  modalOverrideSnapshots = {};
   renderCalendar();
   
   renderNowCard();
@@ -2690,16 +2878,22 @@ document.getElementById('importDataInput').addEventListener('change', async (e)=
     state.shiftTypes = data.shiftTypes;
     state.teams = data.teams;
     state.myTeamId = data.myTeamId || (state.teams[0] && state.teams[0].id);
-    state.referenceDate = data.referenceDate ? startOfDay(new Date(data.referenceDate)) : state.referenceDate;
+    state.referenceDate = (parseIsoDate(data.referenceDate) || state.referenceDate);
     state.shiftTimes = data.shiftTimes || {};
     state.alarms = data.alarms || {};
     state.overrides = data.overrides || {};
     state.notes = data.notes || {};
     state.widgetSize = data.widgetSize || '4x1';
+    sanitizeState();
 
     ensureTimeDefaults();
     renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
     renderCalendar(); renderNowCard(); updateMyTeamHint();
+    // 불러온 내용을 바로 저장하고 알람/위젯/클라우드에도 반영 (예전엔 다음 변경이나 재시작 때까지 옛 상태로 남았음)
+    saveState();
+    rescheduleLocalAlarms();
+    updateNativeWidget();
+    pushStateToCloud(); pushStateToShare(); pushStateToCalSub(); pushStateToCalSubMemo();
     showToastMsg('백업 파일을 불러왔습니다');
   }catch(err){
     showToastMsg('파일을 읽는 중 오류가 발생했습니다');
@@ -2743,7 +2937,7 @@ function renderSyncStatus(){
     return;
   }
   if(syncCode){
-    statusEl.innerHTML = `🟢 연동됨<div class="sync-code-box">코드: <b>${syncCode}</b></div>앱을 열 때, 또는 "지금 동기화"를 눌렀을 때만 다른 기기 내용을 가져와요.`;
+    statusEl.innerHTML = `🟢 연동됨<div class="sync-code-box">코드: <b>${escapeHtml(syncCode)}</b></div>앱을 열 때, 또는 "지금 동기화"를 눌렀을 때만 다른 기기 내용을 가져와요.`;
     stopBtn.style.display = 'block';
     nowBtn.style.display = 'block';
   } else {
@@ -2773,30 +2967,34 @@ function buildSyncPayload(){
     shareCode: state.shareCode, shareCodeHistory: state.shareCodeHistory,
     calSubCode: state.calSubCode, calSubCodeHistory: state.calSubCodeHistory,
     calSubMemoCode: state.calSubMemoCode, calSubMemoCodeHistory: state.calSubMemoCodeHistory,
-    syncCodeHistory: state.syncCodeHistory
+    syncCodeHistory: state.syncCodeHistory,
+    iphoneAlarmCode: state.iphoneAlarmCode, iphoneAlarmCodeHistory: state.iphoneAlarmCodeHistory
   };
 }
 
 // 다른 사람에게 "링크로 보여주는" 용도 - 근무표만 보이고, 개인 메모/일정과 알람 설정은 제외 (가볍게)
+// 외부(공유 받는 사람 / 캘린더 구독 워커)에 나가는 데이터는 필요한 필드만 명시적으로 담는다.
+// (예전엔 알람만 빼고 전부 담아서, 메모 구독 코드·동기화 코드 기록까지 공유 문서에 노출됐음)
+function buildPublicSchedulePayload(){
+  return {
+    shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
+    referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
+    overrides: state.overrides, notes: {}, widgetSize: state.widgetSize
+  };
+}
 function buildShareOnlyPayload(){
-  const full = buildSyncPayload();
-  const { alarms, ...rest } = full;
-  return { ...rest, notes: {} };
+  return buildPublicSchedulePayload();
 }
 
 // 내 캘린더 앱 구독용 - 근무표+메모는 포함하되, 알람 설정은 제외 (가볍게)
 // 구독 캘린더 - 근무표 전용 (메모/알람 제외)
 function buildCalSubPayload(){
-  const full = buildSyncPayload();
-  const { alarms, ...rest } = full;
-  return { ...rest, notes: {} };
+  return buildPublicSchedulePayload();
 }
 
 // 구독 캘린더 - 메모 전용 (근무표/알람 제외 - 팀/오버라이드를 비워서 근무 이벤트가 아예 안 만들어지게 함)
 function buildCalSubMemoPayload(){
-  const full = buildSyncPayload();
-  const { alarms, ...rest } = full;
-  return { ...rest, teams: [], myTeamId: null, overrides: {} };
+  return { ...buildPublicSchedulePayload(), teams: [], myTeamId: null, overrides: {}, notes: state.notes };
 }
 
 function applyRemoteState(data){
@@ -2804,7 +3002,7 @@ function applyRemoteState(data){
   state.shiftTypes = data.shiftTypes || state.shiftTypes;
   state.teams = data.teams || state.teams;
   state.myTeamId = data.myTeamId || state.myTeamId;
-  state.referenceDate = data.referenceDate ? startOfDay(new Date(data.referenceDate)) : state.referenceDate;
+  state.referenceDate = (parseIsoDate(data.referenceDate) || state.referenceDate);
   state.shiftTimes = data.shiftTimes || {};
   state.alarms = data.alarms || {};
   state.overrides = data.overrides || {};
@@ -2829,13 +3027,23 @@ function applyRemoteState(data){
     const merged = new Set([...(state.syncCodeHistory||[]), ...data.syncCodeHistory]);
     state.syncCodeHistory = [...merged];
   }
+  if(!VIEW_SHARE_CODE){
+    if(data.iphoneAlarmCode === null || typeof data.iphoneAlarmCode === 'string') state.iphoneAlarmCode = data.iphoneAlarmCode;
+    if(Array.isArray(data.iphoneAlarmCodeHistory)){
+      state.iphoneAlarmCodeHistory = [...new Set([...(state.iphoneAlarmCodeHistory||[]), ...data.iphoneAlarmCodeHistory])];
+    }
+  }
   shareCode = state.shareCode; // 이 기기의 진행 중인 변수도 최신 값으로 맞춤
   calSubCode = state.calSubCode;
   calSubMemoCode = state.calSubMemoCode;
+  sanitizeState();
   ensureTimeDefaults();
   renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend();
   renderCalendar(); renderNowCard(); updateMyTeamHint();
+  if(VIEW_SHARE_CODE) return; // 읽기전용 공유 화면: 남의 근무표로 내 알람/위젯/저장소를 건드리지 않음
   renderShareStatus();
+  renderIphoneAlarmStatus();
+  pushIphoneAlarmPlan();
   saveState();
   rescheduleLocalAlarms();
   updateNativeWidget();
@@ -2848,14 +3056,53 @@ function applyRemoteState(data){
 
 let syncReadyToPush = false; // 재연결 시 클라우드의 진짜 최신 데이터를 받기 전까지는 절대 push하지 않음
 
+// ---- 오프라인 편집 보호 ----
+// "이 기기에 아직 서버로 못 올린 변경이 있음" 표시와, 마지막으로 서버와 맞춘 버전(clientUpdatedAt)을 기억해둔다.
+// 오프라인에서 수정 → 나중에 온라인으로 열었을 때 오래된 서버 데이터가 로컬을 덮어쓰는 사고를 막기 위함.
+const SYNC_DIRTY_KEY = 'shiftNoteSyncDirty';
+const SYNC_VERSION_KEY = 'shiftNoteSyncVersion';
+function markSyncDirty(){ try{ localStorage.setItem(SYNC_DIRTY_KEY, '1'); }catch(e){} }
+function clearSyncDirty(){ try{ localStorage.removeItem(SYNC_DIRTY_KEY); }catch(e){} }
+function isSyncDirty(){ try{ return localStorage.getItem(SYNC_DIRTY_KEY)==='1'; }catch(e){ return false; } }
+function getKnownSyncVersion(){ try{ return Number(localStorage.getItem(SYNC_VERSION_KEY)) || 0; }catch(e){ return 0; } }
+function setKnownSyncVersion(v){ try{ localStorage.setItem(SYNC_VERSION_KEY, String(v||0)); }catch(e){} }
+
+let syncPullInFlight = false;
 async function pullSyncOnce(showToast){
-  if(!ensureFirebaseInit() || !syncCode) return;
+  if(!ensureFirebaseInit() || !syncCode || syncPullInFlight) return;
+  syncPullInFlight = true;
   try{
     const doc = await syncDb.collection('shiftNoteSync').doc(syncCode).get();
-    syncReadyToPush = true; // 서버로부터 (내용이 있든 없든) 한 번이라도 응답을 받으면, 이제부터는 이 기기가 최신 상태를 아는 것
     const data = doc.data();
-    if(!data || !data.payload){ if(showToast) showToastMsg('아직 다른 기기의 데이터가 없어요'); return; }
+    if(!data || !data.payload){
+      syncReadyToPush = true;
+      if(showToast) showToastMsg('아직 다른 기기의 데이터가 없어요');
+      pushStateToCloud();
+      return;
+    }
     const incomingJSON = stableStringify(data.payload);
+    const remoteVersion = Number(data.clientUpdatedAt) || 0;
+
+    if(isSyncDirty() && incomingJSON !== stableStringify(buildSyncPayload())){
+      // 이 기기에 못 올린 변경이 있음
+      const remoteUnchanged = remoteVersion && remoteVersion === getKnownSyncVersion();
+      let keepLocal = remoteUnchanged;
+      if(!remoteUnchanged){
+        // 서버 쪽도 그 사이에 바뀜 → 어느 쪽을 남길지 사용자에게 물어봄
+        keepLocal = !(await showConfirm('이 기기에서 수정한 내용이 아직 동기화되지 않았는데, 다른 기기에서도 내용이 바뀌었어요.\n\n[확인] 다른 기기 내용으로 바꾸기\n[취소] 이 기기 내용을 유지하고 다른 기기에 올리기'));
+      }
+      syncReadyToPush = true;
+      if(keepLocal){
+        lastSyncedPayloadJSON = incomingJSON;
+        pushStateToCloud();
+        if(showToast) showToastMsg('이 기기의 변경사항을 올렸어요');
+        return;
+      }
+    }
+
+    syncReadyToPush = true; // 서버로부터 응답을 받았으니, 이제부터는 이 기기가 최신 상태를 아는 것
+    setKnownSyncVersion(remoteVersion);
+    clearSyncDirty();
     if(incomingJSON === lastSyncedPayloadJSON){
       if(showToast) showToastMsg('이미 최신 상태예요');
       return;
@@ -2865,8 +3112,16 @@ async function pullSyncOnce(showToast){
     if(showToast) showToastMsg('다른 기기의 변경사항을 가져왔어요');
   }catch(e){
     if(showToast) showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요');
+  }finally{
+    syncPullInFlight = false;
   }
 }
+// 오프라인으로 시작했다가 연결되면, 서버 내용을 확인하고 못 올린 변경을 올림
+window.addEventListener('online', ()=>{
+  if(!syncCode || !stateReady || VIEW_SHARE_CODE) return;
+  if(!syncReadyToPush) pullSyncOnce(false);
+  else pushStateToCloud();
+});
 
 function startSync(code, opts){
   opts = opts || {};
@@ -2890,14 +3145,29 @@ document.getElementById('syncNowBtn').onclick = ()=>{
 };
 
 function pushStateToCloud(){
-  if(!syncDb || !syncCode || !stateReady || !syncReadyToPush) return;
+  if(!syncDb || !syncCode || !stateReady) return;
   const payload = buildSyncPayload();
   const payloadJSON = stableStringify(payload);
   if(payloadJSON === lastSyncedPayloadJSON) return; // 마지막과 똑같으면 전송 생략 (불필요한 통신/배터리 소모 방지)
+  if(!syncReadyToPush){
+    // 아직 서버 최신본을 못 받음(오프라인 시작 등) → 올리지는 않되 "못 올린 변경 있음"으로 기록
+    if(lastSyncedPayloadJSON !== null || isSyncDirty()) markSyncDirty();
+    else lastSyncedPayloadJSON = payloadJSON; // 시작 직후 첫 비교 기준
+    return;
+  }
   lastSyncedPayloadJSON = payloadJSON;
-  syncDb.collection('shiftNoteSync').doc(syncCode).set({
-    payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(()=>{ /* 오프라인이면 조용히 실패, 로컬 저장은 그대로 유지됨 */ });
+  markSyncDirty();
+  const version = Date.now();
+  const codeAtSend = syncCode;
+  syncDb.collection('shiftNoteSync').doc(codeAtSend).set({
+    payload, clientUpdatedAt: version, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>{
+    if(syncCode!==codeAtSend) return;
+    setKnownSyncVersion(version);
+    if(stableStringify(buildSyncPayload())===payloadJSON) clearSyncDirty();
+  }).catch(()=>{
+    lastSyncedPayloadJSON = null; // 실패하면 다음 자동저장(4초) 때 다시 전송
+  });
 }
 
 function generateSyncCode(){
@@ -2991,7 +3261,7 @@ function pushStateToShare(){
   syncDb.collection('shiftNoteShare').doc(shareCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     kind: 'share_link', label: '🔗 링크로 공유 (다른 사람에게 보여주는 용도, 근무표만)'
-  }).catch(()=>{});
+  }).catch(()=>{ lastSharedPayloadJSON = null; /* 실패하면 다음 자동저장 때 다시 전송 */ });
 }
 async function deleteAllKnownShareCodes(){
   if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
@@ -3084,7 +3354,7 @@ function pushStateToCalSub(){
   syncDb.collection('shiftNoteShare').doc(calSubCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     kind: 'calendar_subscription_work', label: '📅 캘린더 구독 - 근무표 전용'
-  }).catch(()=>{});
+  }).catch(()=>{ lastCalSubPayloadJSON = null; /* 실패하면 다음 자동저장 때 다시 전송 */ });
 }
 async function deleteAllKnownCalSubCodes(){
   if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
@@ -3176,7 +3446,7 @@ function pushStateToCalSubMemo(){
   syncDb.collection('shiftNoteShare').doc(calSubMemoCode).set({
     payload, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     kind: 'calendar_subscription_memo', label: '📝 캘린더 구독 - 메모 전용'
-  }).catch(()=>{});
+  }).catch(()=>{ lastCalSubMemoPayloadJSON = null; /* 실패하면 다음 자동저장 때 다시 전송 */ });
 }
 async function deleteAllKnownCalSubMemoCodes(){
   if(!ensureFirebaseInit()) return { ok:false, reason:'no-firebase', failedCodes:[] };
@@ -3360,6 +3630,117 @@ document.getElementById('todayBtn').onclick=()=>{
   }, true);
 })();
 
+// ================= 아이폰 시계 알람 연동 (단축어) =================
+// 아이폰 웹앱은 정해진 시각에 알람을 울릴 수 없어서, 앞으로 60일 동안 "그날 켤 시계 알람 레이블"을 서버 문서로 올려두고
+// 아이폰 단축어 자동화가 매일 그 문서를 읽어 시계 앱 알람을 켜고 끄게 한다. (안내: IPHONE_ALARM.md)
+const IPHONE_ALARM_PREFIX = '교대노트';
+const IPHONE_ALARM_DAYS = 60;
+let lastIphoneAlarmPayloadJSON = null;
+function iphoneAlarmLabelFor(st){ return IPHONE_ALARM_PREFIX+' '+st.name; }
+function yyyymmdd(d){ return isoDate(d).replace(/-/g,''); }
+function buildIphoneAlarmPlan(){
+  const plan = {};
+  const today = startOfDay(new Date());
+  for(let i=0;i<IPHONE_ALARM_DAYS;i++){
+    const date = addDays(today, i);
+    const s = shiftForTeamOnDate(date, state.myTeamId);
+    const st = s.label ? state.shiftTypes.find(x=>x.name===s.label) : null;
+    const a = st ? state.alarms[st.id] : null;
+    plan['d'+yyyymmdd(date)] = (st && a && a.enabled && a.time) ? iphoneAlarmLabelFor(st) : '';
+  }
+  return plan;
+}
+function iphoneAlarmLabelList(){
+  return state.shiftTypes.filter(isTypeUsable)
+    .map(st=>({st, a: state.alarms[st.id]}))
+    .filter(x=> x.a && x.a.enabled && x.a.time)
+    .map(x=>({label: iphoneAlarmLabelFor(x.st), time: x.a.time}));
+}
+function iphoneAlarmUrl(code){
+  return 'https://firestore.googleapis.com/v1/projects/'+firebaseConfig.projectId+'/databases/(default)/documents/shiftNoteShare/'+code+'?key='+firebaseConfig.apiKey;
+}
+function renderIphoneAlarmStatus(){
+  const box = document.getElementById('iphoneAlarmBox');
+  const createBtn = document.getElementById('iphoneAlarmCreateBtn');
+  if(!box) return;
+  if(state.iphoneAlarmCode){
+    document.getElementById('iphoneAlarmUrlInput').value = iphoneAlarmUrl(state.iphoneAlarmCode);
+    const list = iphoneAlarmLabelList();
+    document.getElementById('iphoneAlarmLabels').innerHTML = list.length
+      ? list.map(x=>`• <b>${escapeHtml(x.label)}</b> — ${escapeHtml(x.time)} (반복 안 함)`).join('<br>')
+      : '위 알람 설정에서 하나 이상 켜주세요.';
+    box.style.display = 'block';
+    createBtn.style.display = 'none';
+  } else {
+    box.style.display = 'none';
+    createBtn.style.display = 'block';
+  }
+}
+function pushIphoneAlarmPlan(){
+  if(!state.iphoneAlarmCode || !stateReady || VIEW_SHARE_CODE || !ensureFirebaseInit()) return;
+  const plan = buildIphoneAlarmPlan();
+  const payloadJSON = stableStringify(plan);
+  if(payloadJSON === lastIphoneAlarmPayloadJSON) return;
+  lastIphoneAlarmPayloadJSON = payloadJSON;
+  const today = startOfDay(new Date());
+  syncDb.collection('shiftNoteShare').doc(state.iphoneAlarmCode).set({
+    plan, prefix: IPHONE_ALARM_PREFIX,
+    validFrom: yyyymmdd(today), validUntil: yyyymmdd(addDays(today, IPHONE_ALARM_DAYS-1)),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    kind: 'iphone_alarm_plan', label: '⏰ 아이폰 시계 알람 연동'
+  }).catch(()=>{ lastIphoneAlarmPayloadJSON = null; /* 실패하면 다음 자동저장 때 다시 전송 */ });
+}
+function setIphoneAlarmCode(newCode){
+  if(state.iphoneAlarmCode){
+    state.iphoneAlarmCodeHistory = state.iphoneAlarmCodeHistory || [];
+    if(!state.iphoneAlarmCodeHistory.includes(state.iphoneAlarmCode)) state.iphoneAlarmCodeHistory.push(state.iphoneAlarmCode);
+    state.iphoneAlarmCodeHistory = state.iphoneAlarmCodeHistory.slice(-20);
+  }
+  state.iphoneAlarmCode = newCode;
+  lastIphoneAlarmPayloadJSON = null;
+  saveState();
+}
+async function deleteAllKnownIphoneAlarmCodes(){
+  if(!ensureFirebaseInit()) return;
+  const codes = new Set(state.iphoneAlarmCodeHistory || []);
+  if(state.iphoneAlarmCode) codes.add(state.iphoneAlarmCode);
+  const failed = [];
+  await Promise.all([...codes].map(code=> syncDb.collection('shiftNoteShare').doc(code).delete().catch(()=>{ failed.push(code); })));
+  state.iphoneAlarmCodeHistory = failed; // 못 지운 것만 남겨서 다음에 다시 시도
+}
+document.getElementById('iphoneAlarmCreateBtn').onclick = ()=>{
+  if(!ensureFirebaseInit()){ showToastMsg('서버 기능이 아직 설정되지 않았어요'); return; }
+  setIphoneAlarmCode(generateSyncCode());
+  renderIphoneAlarmStatus();
+  pushIphoneAlarmPlan();
+  showToastMsg('아이폰 알람 연동을 켰어요. 주소를 단축어에 넣어주세요');
+};
+document.getElementById('iphoneAlarmCopyBtn').onclick = async ()=>{
+  const val = document.getElementById('iphoneAlarmUrlInput').value;
+  try{ await navigator.clipboard.writeText(val); showToastMsg('단축어용 주소를 복사했어요'); }
+  catch(e){ showToastMsg('복사에 실패했어요 — 직접 길게 눌러 복사해주세요'); }
+};
+document.getElementById('iphoneAlarmRegenBtn').onclick = async ()=>{
+  const ok = await showConfirm('새로 만들면 예전 주소는 더 이상 작동하지 않아요.\n단축어 안의 주소도 바꿔야 해요. 계속할까요?');
+  if(!ok) return;
+  await deleteAllKnownIphoneAlarmCodes();
+  state.iphoneAlarmCode = null;
+  setIphoneAlarmCode(generateSyncCode());
+  renderIphoneAlarmStatus();
+  pushIphoneAlarmPlan();
+  showToastMsg('새 주소를 만들었어요');
+};
+document.getElementById('iphoneAlarmOffBtn').onclick = async ()=>{
+  const ok = await showConfirm('연동을 끄면 단축어가 더 이상 알람을 켜지 않아요. 계속할까요?');
+  if(!ok) return;
+  await deleteAllKnownIphoneAlarmCodes();
+  state.iphoneAlarmCode = null;
+  lastIphoneAlarmPayloadJSON = null;
+  saveState();
+  renderIphoneAlarmStatus();
+  showToastMsg('아이폰 알람 연동을 껐어요');
+};
+
 // ================= 로컬 저장 (자동 저장/복원) =================
 const STORAGE_KEY = 'shiftNoteState_v1';
 
@@ -3386,7 +3767,9 @@ function saveState(){
       calSubCodeHistory: state.calSubCodeHistory,
       calSubMemoCode: state.calSubMemoCode,
       calSubMemoCodeHistory: state.calSubMemoCodeHistory,
-      syncCodeHistory: state.syncCodeHistory
+      syncCodeHistory: state.syncCodeHistory,
+      iphoneAlarmCode: state.iphoneAlarmCode,
+      iphoneAlarmCodeHistory: state.iphoneAlarmCodeHistory
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }catch(e){ /* 저장 불가(사파리 프라이빗 모드 등) 시 조용히 무시 */ }
@@ -3401,7 +3784,7 @@ function loadState(){
     state.shiftTypes = data.shiftTypes;
     state.teams = data.teams;
     state.myTeamId = data.myTeamId || (state.teams[0] && state.teams[0].id);
-    state.referenceDate = data.referenceDate ? startOfDay(new Date(data.referenceDate)) : state.referenceDate;
+    state.referenceDate = (parseIsoDate(data.referenceDate) || state.referenceDate);
     state.shiftTimes = data.shiftTimes || {};
     state.alarms = data.alarms || {};
     state.overrides = data.overrides || {};
@@ -3414,6 +3797,8 @@ function loadState(){
     state.calSubMemoCode = data.calSubMemoCode !== undefined ? data.calSubMemoCode : null;
     state.calSubMemoCodeHistory = Array.isArray(data.calSubMemoCodeHistory) ? data.calSubMemoCodeHistory : [];
     state.syncCodeHistory = Array.isArray(data.syncCodeHistory) ? data.syncCodeHistory : [];
+    state.iphoneAlarmCode = typeof data.iphoneAlarmCode==='string' ? data.iphoneAlarmCode : null;
+    state.iphoneAlarmCodeHistory = Array.isArray(data.iphoneAlarmCodeHistory) ? data.iphoneAlarmCodeHistory : [];
     // 예전 버전에서 공유 코드를 별도 localStorage 키에만 저장했던 경우, 이번에 메인 저장소로 옮겨옴
     if(!state.shareCode){
       const legacyCode = localStorage.getItem('shiftNoteShareCode');
@@ -3422,6 +3807,7 @@ function loadState(){
         if(!state.shareCodeHistory.includes(legacyCode)) state.shareCodeHistory.push(legacyCode);
       }
     }
+    sanitizeState();
     return true;
   }catch(e){ return false; }
 }
@@ -3474,7 +3860,10 @@ if(VIEW_SHARE_CODE){
   renderShareStatus();
   renderCalSubStatus();
 
-  const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); pushStateToCalSub(); pushStateToCalSubMemo(); };
+  const saveAll = ()=>{ saveState(); pushStateToCloud(); pushStateToShare(); pushStateToCalSub(); pushStateToCalSubMemo(); pushIphoneAlarmPlan(); };
+  renderIphoneAlarmStatus();
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  if(!CAP_NATIVE && IS_IOS) document.getElementById('iosAlarmNotice').style.display = 'block';
   setInterval(saveAll, 4000); // 4초마다 자동 저장 (로컬 + 동기화/공유 켜져있으면 클라우드까지)
   window.addEventListener('beforeunload', saveAll);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
@@ -3488,6 +3877,7 @@ if(VIEW_SHARE_CODE){
   pushStateToShare();
   pushStateToCalSub();
   pushStateToCalSubMemo();
+  pushIphoneAlarmPlan();
 }
 
 // ================= PWA: SERVICE WORKER 등록 =================

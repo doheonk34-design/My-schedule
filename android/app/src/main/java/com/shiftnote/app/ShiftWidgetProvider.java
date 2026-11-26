@@ -9,6 +9,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.widget.RemoteViews;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import org.json.JSONObject;
 
 public class ShiftWidgetProvider extends AppWidgetProvider {
 
@@ -17,6 +21,13 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
     public static final String PREF_RANGE = "range";
     public static final String PREF_TEAM = "team";
     public static final String PREF_COLOR = "color";
+    /** 날짜별 근무 정보 JSON: {"YYYY-MM-DD": {label, range, color}} - 앱을 안 열어도 날짜가 바뀌면 그날 근무를 보여주기 위함 */
+    public static final String PREF_DAYS = "days";
+
+    /** "YYYY-MM-DD" (기기 현지 시간 기준 오늘) */
+    static String todayIso() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+    }
 
     /** JS 쪽에서 데이터가 바뀔 때마다 이 메서드를 호출해서 화면에 붙어있는 모든 위젯을 즉시 갱신한다. */
     public static void updateAll(Context context) {
@@ -33,6 +44,7 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        // updatePeriodMillis(30분)마다 호출됨 → 자정이 지나면 저장된 날짜별 데이터에서 새 날짜 근무를 골라 표시
         for (int id : appWidgetIds) {
             updateOne(context, appWidgetManager, id);
         }
@@ -44,6 +56,18 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
         String range = prefs.getString(PREF_RANGE, "");
         String team = prefs.getString(PREF_TEAM, "");
         String colorStr = prefs.getString(PREF_COLOR, "#6C7BFF");
+
+        try {
+            JSONObject days = new JSONObject(prefs.getString(PREF_DAYS, "{}"));
+            JSONObject today = days.optJSONObject(todayIso());
+            if (today != null) {
+                label = today.optString("label", "-");
+                range = today.optString("range", "");
+                colorStr = today.optString("color", "#6C7BFF");
+            }
+        } catch (Exception ignored) {
+            // 날짜별 데이터가 없거나 깨졌으면 마지막으로 받은 값 그대로 사용
+        }
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.shift_widget);
         views.setTextViewText(R.id.widget_label, (label == null || label.isEmpty()) ? "근무 정보 없음" : label);
