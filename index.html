@@ -2156,6 +2156,7 @@ let lastAlarmSummary = null;
 let lastAlarmRescheduleAt = 0;
 // 여러 곳에서 연달아 호출돼도 300ms 안의 호출은 한 번으로 합치고, 실행은 하나씩 순서대로(취소/예약이 섞이지 않게)
 function rescheduleLocalAlarms(){
+  try{ renderIphoneAlarmStatus(); }catch(e){}
   if(!CAP_NATIVE || !LocalNotificationsPlugin) return Promise.resolve();
   return new Promise(resolve=>{
     clearTimeout(alarmRescheduleTimer);
@@ -3765,7 +3766,12 @@ document.getElementById('todayBtn').onclick=()=>{
 const IPHONE_ALARM_PREFIX = '교대노트';
 const IPHONE_ALARM_DAYS = 365; // 1년치 (앱을 열 때마다 다시 1년치로 갱신)
 let lastIphoneAlarmPayloadJSON = null;
-function iphoneAlarmLabelFor(st){ return IPHONE_ALARM_PREFIX+' '+st.name; }
+function iphoneAlarmLabelFor(st){ return IPHONE_ALARM_PREFIX+' ['+st.name+']'; }
+function addMinutesToTime(hhmm, minutes){
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = ((h*60 + m + minutes) % 1440 + 1440) % 1440;
+  return String(Math.floor(total/60)).padStart(2,'0') + ':' + String(total%60).padStart(2,'0');
+}
 function yyyymmdd(d){ return isoDate(d).replace(/-/g,''); }
 function buildIphoneAlarmPlan(){
   const plan = {};
@@ -3783,10 +3789,18 @@ function iphoneAlarmLabelList(){
   return state.shiftTypes.filter(isTypeUsable)
     .map(st=>({st, a: state.alarms[st.id]}))
     .filter(x=> x.a && x.a.enabled && x.a.time)
-    .map(x=>({label: iphoneAlarmLabelFor(x.st), time: x.a.time}));
+    .flatMap(x=>{
+      const count = Math.max(1, x.a.repeat || 1);
+      const base = iphoneAlarmLabelFor(x.st);
+      return Array.from({length: count}, (_, r)=>({
+        label: r===0 ? base : base+' '+(r+1),
+        time: addMinutesToTime(x.a.time, r*3)
+      }));
+    });
 }
+// 캘린더 워커가 오늘(한국 시간) 켤 알람 이름을 글자 한 줄로 돌려줌 (없으면 빈 글자) → 단축어가 단순해짐
 function iphoneAlarmUrl(code){
-  return 'https://firestore.googleapis.com/v1/projects/'+firebaseConfig.projectId+'/databases/(default)/documents/shiftNoteShare/'+code+'?key='+firebaseConfig.apiKey;
+  return CALENDAR_WORKER_ORIGIN + '/' + code + '/alarm.txt';
 }
 function renderIphoneAlarmStatus(){
   const box = document.getElementById('iphoneAlarmBox');
@@ -3796,7 +3810,9 @@ function renderIphoneAlarmStatus(){
     document.getElementById('iphoneAlarmUrlInput').value = iphoneAlarmUrl(state.iphoneAlarmCode);
     const list = iphoneAlarmLabelList();
     document.getElementById('iphoneAlarmLabels').innerHTML = list.length
-      ? list.map(x=>`• <b>${escapeHtml(x.label)}</b> — ${escapeHtml(x.time)} (반복 안 함)`).join('<br>')
+      ? list.map(x=>`• <b>${escapeHtml(x.label)}</b> — ${escapeHtml(x.time)}`).join('<br>')
+        + '<br><span style="color:var(--sub)">시계 앱에서 레이블을 똑같이 입력하고, 요일 "반복"은 <b>안 함</b>으로 두세요. '
+        + '재알림 횟수를 2회 이상으로 정하면 3분 간격 알람이 그만큼 목록에 나와요.</span>'
       : '위 알람 설정에서 하나 이상 켜주세요.';
     box.style.display = 'block';
     createBtn.style.display = 'none';

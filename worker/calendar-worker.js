@@ -32,6 +32,12 @@ export default {
       }
 
       const docUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/shiftNoteShare/${code}`;
+
+      // ---- 아이폰 단축어용: /<코드>/alarm.txt → 오늘(한국 시간) 켤 시계 알람 레이블 한 줄 (없으면 빈 글자) ----
+      if (url.pathname.toLowerCase().endsWith('/alarm.txt')) {
+        return alarmLabelResponse(docUrl);
+      }
+
       const docRes = await fetch(docUrl);
       if (docRes.status === 404) {
         return emptyCalendar(); // 지워진 구독
@@ -56,6 +62,27 @@ export default {
     }
   },
 };
+
+// ---- 아이폰 단축어용 오늘 알람 레이블 ----
+// 앱이 올려둔 "날짜별 켤 알람 레이블"(plan: { d20261128: '교대노트 [주]', ... })에서 오늘 값을 꺼내 글자로 돌려줌.
+// 종료·없는 코드, 오늘 알람이 없는 날은 빈 글자 → 단축어는 교대노트 알람을 모두 끈 상태로 둠.
+async function alarmLabelResponse(docUrl) {
+  const textHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' };
+  const res = await fetch(docUrl);
+  if (res.status === 404) return new Response('', { headers: textHeaders });
+  if (!res.ok) {
+    // 일시적 오류: 단축어가 실패하게 두면 시계 알람이 전날 상태 그대로 유지됨 (잘못 꺼지지 않도록)
+    return new Response('서버 오류', { status: 502, headers: textHeaders });
+  }
+  const doc = await res.json();
+  const data = doc.fields ? decodeFirestoreFields(doc.fields) : {};
+  if (data.revoked === true || data.kind !== 'iphone_alarm_plan' || !data.plan) {
+    return new Response('', { headers: textHeaders });
+  }
+  const key = 'd' + isoDate(kstNow()).replace(/-/g, '');
+  const label = typeof data.plan[key] === 'string' ? data.plan[key] : '';
+  return new Response(label, { headers: textHeaders });
+}
 
 // ---- 빈 캘린더 (종료·없는 구독용) ----
 function emptyCalendar() {
