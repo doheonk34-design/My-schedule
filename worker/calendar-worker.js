@@ -82,7 +82,12 @@ async function alarmLabelResponse(docUrl) {
     return new Response(NONE, { headers: textHeaders });
   }
   const key = 'd' + isoDate(kstNow()).replace(/-/g, '');
-  const label = typeof data.plan[key] === 'string' && data.plan[key] ? data.plan[key] : NONE;
+  let label = typeof data.plan[key] === 'string' && data.plan[key] ? data.plan[key].trim() : NONE;
+  // 예전 버전 앱은 "교대노트 주"처럼 대괄호 없이 올림 → 시계 알람 레이블 형식("교대노트 [주]")으로 맞춰 줌
+  const prefix = (typeof data.prefix === 'string' && data.prefix) || '교대노트';
+  if (label !== NONE && label.startsWith(prefix + ' ') && !label.includes('[')) {
+    label = prefix + ' [' + label.slice(prefix.length + 1).trim() + ']';
+  }
   return new Response(label, { headers: textHeaders });
 }
 
