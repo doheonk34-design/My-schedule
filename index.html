@@ -711,6 +711,9 @@
             <input type="text" id="calSubLinkInput" readonly>
             <button class="btn" id="calSubCopyBtn">복사</button>
           </div>
+          <button class="btn primary block cal-webcal-btn" id="calSubAddBtn" style="margin-top:10px;">📲 아이폰 캘린더에 바로 추가</button>
+          <p class="subtext cal-ios-guide" style="margin-top:8px;">아이폰: 위 버튼 → "구독" → "추가"를 누르세요. 버튼이 안 되면 주소를 복사해서 <b>설정 → 앱 → 캘린더 → 캘린더 계정 → 계정 추가 → 기타 → 구독 캘린더 추가</b>에 붙여넣으면 돼요. ("⬇️ 내보내기" 백업 파일은 캘린더에 넣을 수 없어요)</p>
+          <p class="subtext" style="margin-top:4px;">일정은 지난달~다음 달까지 보이고, 캘린더 앱이 몇 시간마다 알아서 새로 받아요.</p>
           <div class="row" style="margin-top:10px;">
             <button class="btn" id="calSubRegenBtn">🔄 새로 만들기</button>
             <button class="btn" id="calSubOffBtn">구독 끄기</button>
@@ -728,6 +731,9 @@
             <input type="text" id="calSubMemoLinkInput" readonly>
             <button class="btn" id="calSubMemoCopyBtn">복사</button>
           </div>
+          <button class="btn primary block cal-webcal-btn" id="calSubMemoAddBtn" style="margin-top:10px;">📲 아이폰 캘린더에 바로 추가</button>
+          <p class="subtext cal-ios-guide" style="margin-top:8px;">아이폰: 위 버튼 → "구독" → "추가"를 누르세요. 버튼이 안 되면 주소를 복사해서 <b>설정 → 앱 → 캘린더 → 캘린더 계정 → 계정 추가 → 기타 → 구독 캘린더 추가</b>에 붙여넣으면 돼요. ("⬇️ 내보내기" 백업 파일은 캘린더에 넣을 수 없어요)</p>
+          <p class="subtext" style="margin-top:4px;">일정은 지난달~다음 달까지 보이고, 캘린더 앱이 몇 시간마다 알아서 새로 받아요.</p>
           <div class="row" style="margin-top:10px;">
             <button class="btn" id="calSubMemoRegenBtn">🔄 새로 만들기</button>
             <button class="btn" id="calSubMemoOffBtn">구독 끄기</button>
@@ -3571,6 +3577,17 @@ document.getElementById('calSubOffBtn').onclick = async ()=>{
     showToastMsg('구독을 껐고, 서버에서도 확실히 지웠어요');
   }
 };
+
+// 아이폰/맥: webcal:// 주소를 열면 캘린더 앱의 "구독" 화면이 바로 뜸 (주소 복사·설정 메뉴를 찾을 필요 없음)
+const CAL_APPLE_DEVICE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+function openWebcal(inputId){
+  const url = document.getElementById(inputId).value;
+  if(!url) return;
+  window.location.href = url.replace(/^https?:\/\//, 'webcal://');
+}
+document.getElementById('calSubAddBtn').onclick = ()=> openWebcal('calSubLinkInput');
+document.getElementById('calSubMemoAddBtn').onclick = ()=> openWebcal('calSubMemoLinkInput');
+document.querySelectorAll('.cal-webcal-btn, .cal-ios-guide').forEach(el=>{ if(!CAL_APPLE_DEVICE) el.style.display='none'; });
 
 // ---- 메모 전용 구독 (근무표용과 완전히 별개) ----
 function renderCalSubMemoStatus(){
