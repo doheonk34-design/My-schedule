@@ -22,11 +22,13 @@ service cloud.firestore {
     }
 
     // 공유 링크 / 캘린더 구독 / 아이폰 알람 계획 (읽기 전용으로 바깥에 나가는 문서)
+    // 끌 때는 지우지 않고 revoked=true로 남김 → 종료된 문서는 다시 쓸 수 없어서, 다른 기기가 되살리지 못함
     match /shiftNoteShare/{code} {
       allow get: if validCode(code);
       allow list: if false;
       allow create, update: if validCode(code)
-        && request.resource.data.keys().hasOnly(['payload', 'updatedAt', 'kind', 'label', 'plan', 'prefix', 'validFrom', 'validUntil'])
+        && (resource == null || resource.data.get('revoked', false) != true)
+        && request.resource.data.keys().hasOnly(['payload', 'updatedAt', 'kind', 'label', 'plan', 'prefix', 'validFrom', 'validUntil', 'revoked'])
         && request.resource.data.kind in ['share_link', 'calendar_subscription_work', 'calendar_subscription_memo', 'iphone_alarm_plan'];
       allow delete: if validCode(code);
     }
