@@ -971,7 +971,13 @@ function sanitizeState(){
   Object.keys(state.overrides).forEach(iso=>{
     const ov = state.overrides[iso];
     if(!isPlainObj(ov)){ delete state.overrides[iso]; return; }
-    Object.keys(ov).forEach(tid=>{ if(typeof ov[tid]!=='string') delete ov[tid]; });
+    Object.keys(ov).forEach(tid=>{
+      if(typeof ov[tid]!=='string'){ delete ov[tid]; return; }
+      if(!state.shiftTypes.some(s=>s.id===ov[tid])){
+        const byName = state.shiftTypes.find(s=>s.name===ov[tid]);
+        if(byName) ov[tid] = byName.id; // 예전 형식(이름) → 근무유형 id
+      }
+    });
   });
   Object.keys(state.notes).forEach(iso=>{
     const list = state.notes[iso];
@@ -1154,14 +1160,6 @@ function ensureTimeDefaults(){
 
 function isTypeUsable(st){ return !(st.locked && st.enabled===false); }
 
-function distinctLabels(){
-  const set = new Set(state.shiftTypes.filter(isTypeUsable).map(s=>s.name));
-  Object.values(state.overrides).forEach(dayMap=>{
-    Object.values(dayMap).forEach(l=>set.add(l));
-  });
-  return [...set];
-}
-
 // ================= SHIFT TYPE MANAGER UI =================
 const PRESET_CAPTIONS = {st1:'주간', st2:'야간', st3:'비번', st4:'휴무'};
 
@@ -1264,6 +1262,11 @@ function renderShiftTypeRows(){
     row.querySelector('.st-remove').onclick = ()=>{
       state.shiftTypes = state.shiftTypes.filter(s=>s.id!==st.id);
       state.teams.forEach(t=>{ t.sequence = t.sequence.filter(id=>id!==st.id); });
+      Object.keys(state.overrides).forEach(iso=>{
+        const day = state.overrides[iso];
+        Object.keys(day).forEach(tid=>{ if(day[tid]===st.id) delete day[tid]; });
+        if(!Object.keys(day).length) delete state.overrides[iso];
+      });
       renderShiftTypeRows(); renderTeamsBuilder(); renderAlarmList(); renderLegend(); renderCalendar(); renderNowCard();
     };
     el.appendChild(row);
@@ -1425,25 +1428,53 @@ function detectDayShiftStartIndex(team){
 }
 
 // ================= SHIFT LOOKUP =================
-const BLANK_SHIFT = {label:'', color:'', role:'other'};
+const BLANK_SHIFT = {label:'', color:'', role:'other', typeId:null};
+
+// 날짜별 수정(override)은 근무유형 id로 저장한다. (예전 버전은 이름으로 저장해서, 이름을 바꾸면 연결이 끊겼음)
+// 예전 데이터(이름) 호환을 위해 id → 이름 순서로 찾는다.
+function resolveOverrideType(v){
+  return state.shiftTypes.find(s=>s.id===v) || state.shiftTypes.find(s=>s.name===v) || null;
+}
+// 계산된 근무 → 근무유형 객체 (없으면 null)
+function shiftTypeOf(shift){
+  return shift && shift.typeId ? (state.shiftTypes.find(st=>st.id===shift.typeId) || null) : null;
+}
 
 function shiftForTeamOnDate(date, teamId){
   const iso = isoDate(date);
   const ov = state.overrides[iso];
   if(ov && ov[teamId] !== undefined){
-    const label = ov[teamId];
-    const matched = state.shiftTypes.find(s=>s.name===label);
-    if(matched && !isTypeUsable(matched)) return BLANK_SHIFT;
-    return {label, color: colorForLabel(label), role: matched?matched.role:'other'};
+    const v = ov[teamId];
+    const matched = resolveOverrideType(v);
+    if(matched){
+      if(!isTypeUsable(matched)) return BLANK_SHIFT;
+      return {label: matched.name, color: colorForShiftType(matched), role: matched.role, typeId: matched.id};
+    }
+    if(/^st\d+$/.test(v)) return BLANK_SHIFT; // 삭제된 근무유형을 가리키는 수정
+    return {label: v, color: colorForLabel(v), role: 'other', typeId: null}; // 예전 자유 입력 라벨
   }
   const team = state.teams.find(t=>t.id===teamId);
-  if(!team || team.sequence.length===0) return {label:'-', color:'#3A4150', role:'other'};
+  if(!team || team.sequence.length===0) return {label:'-', color:'#3A4150', role:'other', typeId:null};
   const L = team.sequence.length;
   const diff = diffDays(date, state.referenceDate);
   const idx = ((diff % L)+L)%L;
   const st = getShiftType(team.sequence[idx]);
   if(!isTypeUsable(st)) return BLANK_SHIFT;
-  return {label: st.name, color: colorForShiftType(st), role: st.role};
+  return {label: st.name, color: colorForShiftType(st), role: st.role, typeId: st.id};
+}
+
+// 외부(공유 받는 사람 / 캘린더 구독 워커)용: 예전 형식(이름)으로 바꿔서 내보냄 (워커·구버전 앱 호환)
+function overridesAsLabels(){
+  const out = {};
+  Object.keys(state.overrides).forEach(iso=>{
+    const day = state.overrides[iso];
+    out[iso] = {};
+    Object.keys(day).forEach(tid=>{
+      const st = resolveOverrideType(day[tid]);
+      out[iso][tid] = st ? st.name : day[tid];
+    });
+  });
+  return out;
 }
 
 function findOppositeShift(date, myRole){
@@ -1566,7 +1597,7 @@ const weekdayNames = ['일','월','화','수','목','금','토'];
 
 function computeShiftWindow(baseDate, teamId){
   const s = shiftForTeamOnDate(baseDate, teamId);
-  const matched = state.shiftTypes.find(st=>st.name===s.label);
+  const matched = shiftTypeOf(s);
   if(!matched) return null;
   if(!(matched.role==='day' || matched.role==='night')) return null;
   const times = state.shiftTimes[matched.id];
@@ -1996,13 +2027,13 @@ function updateNativeWidget(){
     const now = new Date();
     const t = shiftForTeamOnDate(now, state.myTeamId);
     const team = state.teams.find(tt=>tt.id===state.myTeamId);
-    const matched = state.shiftTypes.find(st=>st.name===t.label);
+    const matched = shiftTypeOf(t);
     const times = matched ? state.shiftTimes[matched.id] : null;
     const days = {};
     for(let i=0;i<WIDGET_DAYS_AHEAD;i++){
       const date = addDays(startOfDay(now), i);
       const s = shiftForTeamOnDate(date, state.myTeamId);
-      const st = state.shiftTypes.find(x=>x.name===s.label);
+      const st = shiftTypeOf(s);
       const tm = st ? state.shiftTimes[st.id] : null;
       days[isoDate(date)] = {
         label: s.label || '-',
@@ -2144,7 +2175,7 @@ async function doRescheduleLocalAlarms(){
     for(let d=0; d<DAYS_AHEAD; d++){
       const date = addDays(startOfDay(now), d);
       const s = shiftForTeamOnDate(date, state.myTeamId);
-      const matched = state.shiftTypes.find(st=>st.name===s.label);
+      const matched = shiftTypeOf(s);
       if(!matched) continue;
       const a = state.alarms[matched.id];
       if(!a || !a.enabled || !a.time) continue;
@@ -2642,16 +2673,22 @@ document.getElementById('modalLunarLeap').onchange = onLunarSelectChange;
 function renderModalTeamSelect(){
   const teamsEl = document.getElementById('modalTeams');
   teamsEl.innerHTML='';
-  const labels = distinctLabels();
   const myTeam = state.teams.find(t=>t.id===state.myTeamId);
   if(myTeam){
-    const current = shiftForTeamOnDate(modalDate, myTeam.id).label;
+    const curShift = shiftForTeamOnDate(modalDate, myTeam.id);
+    const current = curShift.typeId || curShift.label;
+    const options = state.shiftTypes.filter(isTypeUsable).map(st=>({value: st.id, text: st.name}));
+    const legacy = new Set();
+    Object.values(state.overrides).forEach(day=> Object.values(day).forEach(v=>{
+      if(!resolveOverrideType(v) && !/^st\d+$/.test(v)) legacy.add(v);
+    }));
+    legacy.forEach(l=> options.push({value: l, text: l}));
     const row = document.createElement('div');
     row.className='modal-team-row';
     row.innerHTML = `
       <span class="tname">${escapeHtml(myTeam.name)} <span style="color:var(--sub);font-weight:400;">(나의 근무조)</span></span>
       <select data-team="${escapeHtml(myTeam.id)}">
-        ${labels.map(l=>`<option value="${escapeHtml(l)}" ${l===current?'selected':''}>${escapeHtml(l)}</option>`).join('')}
+        ${options.map(o=>`<option value="${escapeHtml(o.value)}" ${o.value===current?'selected':''}>${escapeHtml(o.text)}</option>`).join('')}
       </select>
     `;
     row.querySelector('select').onchange = (e)=>{
@@ -2979,7 +3016,7 @@ function buildPublicSchedulePayload(){
   return {
     shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
     referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    overrides: state.overrides, notes: {}, widgetSize: state.widgetSize
+    overrides: overridesAsLabels(), notes: {}, widgetSize: state.widgetSize
   };
 }
 function buildShareOnlyPayload(){
@@ -3644,7 +3681,7 @@ function buildIphoneAlarmPlan(){
   for(let i=0;i<IPHONE_ALARM_DAYS;i++){
     const date = addDays(today, i);
     const s = shiftForTeamOnDate(date, state.myTeamId);
-    const st = s.label ? state.shiftTypes.find(x=>x.name===s.label) : null;
+    const st = shiftTypeOf(s);
     const a = st ? state.alarms[st.id] : null;
     plan['d'+yyyymmdd(date)] = (st && a && a.enabled && a.time) ? iphoneAlarmLabelFor(st) : '';
   }
