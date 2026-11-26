@@ -196,6 +196,50 @@ public class RingtonePickerPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("count", r.optInt("count", 0));
         ret.put("next", r.optLong("next", 0L));
+        ret.put("fullScreenOk", canUseFullScreen(context));
+        call.resolve(ret);
+    }
+
+    /** 잠금 화면 위로 알람 화면을 띄울 수 있는지 (안드로이드 14+는 "전체 화면 알림" 권한 필요) */
+    private static boolean canUseFullScreen(Context context) {
+        if (Build.VERSION.SDK_INT < 34) return true;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        return nm == null || nm.canUseFullScreenIntent();
+    }
+
+    @PluginMethod
+    public void openFullScreenIntentSettings(PluginCall call) {
+        Context context = getContext();
+        try {
+            Intent intent = new Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT");
+            intent.setData(Uri.parse("package:" + context.getPackageName()));
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch (Exception e) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + context.getPackageName()));
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {}
+        }
+        call.resolve();
+    }
+
+    /** "지금 테스트": 실제 알람 화면을 바로 띄워 소리·화면을 확인 */
+    @PluginMethod
+    public void testAlarmNow(PluginCall call) {
+        Context context = getContext();
+        Intent ring = new Intent(context, AlarmRingService.class)
+            .setAction(AlarmRingService.ACTION_RING)
+            .putExtra(AlarmRingService.EXTRA_TITLE, "⏰ 교대노트 알람 (테스트)")
+            .putExtra(AlarmRingService.EXTRA_BODY, call.getString("body", "알람 테스트"))
+            .putExtra(AlarmRingService.EXTRA_SOUND, call.getString("sound", "classic"))
+            .putExtra(AlarmRingService.EXTRA_GROUP, "test:" + System.currentTimeMillis());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(ring);
+        else context.startService(ring);
+        JSObject ret = new JSObject();
+        ret.put("fullScreenOk", canUseFullScreen(context));
         call.resolve(ret);
     }
 

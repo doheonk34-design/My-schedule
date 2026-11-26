@@ -402,7 +402,8 @@ public class WidgetSync {
                     .put("enabled", a.optBoolean("enabled", false))
                     .put("time", a.optString("time", ""))
                     .put("repeat", a.optInt("repeat", 1))
-                    .put("channelId", custom ? "alarm_custom_" + id + "_" + shortHash(customUri) : "alarm_" + (sound.isEmpty() ? "classic" : sound)));
+                    .put("channelId", custom ? "alarm_custom_" + id + "_" + shortHash(customUri) : "alarm_" + (sound.isEmpty() ? "classic" : sound))
+                    .put("sound", custom ? customUri : (sound.isEmpty() ? "classic" : sound)));
             } else {
                 t.put("alarm", JSONObject.NULL);
             }

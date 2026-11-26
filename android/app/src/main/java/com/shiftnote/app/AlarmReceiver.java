@@ -27,6 +27,21 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
         if (!AlarmScheduler.ACTION_FIRE.equals(action)) return;
 
+        // 끌 때까지 울리는 전체 화면 알람
+        try {
+            Intent ring = new Intent(context, AlarmRingService.class)
+                .setAction(AlarmRingService.ACTION_RING)
+                .putExtra(AlarmRingService.EXTRA_TITLE, intent.getStringExtra("title"))
+                .putExtra(AlarmRingService.EXTRA_BODY, intent.getStringExtra("body"))
+                .putExtra(AlarmRingService.EXTRA_SOUND, intent.getStringExtra("sound"))
+                .putExtra(AlarmRingService.EXTRA_GROUP, intent.getStringExtra("group"));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(ring);
+            else context.startService(ring);
+            return;
+        } catch (Exception e) {
+            // 서비스를 시작할 수 없는 경우에만 아래 예전 방식(알림 한 번)으로
+        }
+
         String title = intent.getStringExtra("title");
         String body = intent.getStringExtra("body");
         String channelId = intent.getStringExtra("channelId");

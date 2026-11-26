@@ -2187,11 +2187,19 @@ function buildNativeAlarmModel(){
       usable: isTypeUsable(st),
       alarm: a ? {
         enabled: !!a.enabled, time: a.time || '', repeat: a.repeat || 1,
-        channelId: isCustom ? customChannelIdFor(st.id, a.customUri) : 'alarm_'+(a.sound||'classic')
+        channelId: isCustom ? customChannelIdFor(st.id, a.customUri) : 'alarm_'+(a.sound||'classic'),
+        sound: isCustom ? a.customUri : (a.sound||'classic')
       } : null
     };
   });
   return { refDate: isoDate(state.referenceDate), sequence: team ? team.sequence : [], overrides, types };
+}
+let fullScreenAsked = false;
+async function maybeAskFullScreenPermission(res){
+  if(fullScreenAsked || !res || res.fullScreenOk !== false || !(res.count > 0)) return;
+  fullScreenAsked = true;
+  const ok = await showConfirm('알람이 울릴 때 잠금 화면 위에 알람 화면을 띄우려면 "전체 화면 알림" 권한이 필요해요.\n설정 화면으로 이동할까요?');
+  if(ok){ try{ await RingtonePickerPlugin.openFullScreenIntentSettings(); }catch(e){} }
 }
 async function cancelLocalNotificationAlarms(){
   try{
@@ -2222,6 +2230,7 @@ async function doRescheduleLocalAlarms(){
       const res = await RingtonePickerPlugin.setAlarmModel({ model: buildNativeAlarmModel() });
       await cancelLocalNotificationAlarms(); // 예전 방식으로 예약해둔 알람이 있으면 중복되지 않게 정리
       announceAlarmSummary(res.count||0, res.next||0);
+      maybeAskFullScreenPermission(res);
       return;
     }catch(e){ /* 네이티브 예약기가 없는 예전 APK면 아래 기존 방식으로 */ }
   }
@@ -2305,9 +2314,21 @@ document.addEventListener('visibilitychange', ()=>{
   updateNativeWidget();
 });
 
-document.getElementById('testAlarm').onclick = ()=>{
+document.getElementById('testAlarm').onclick = async ()=>{
   const enabledIds = Object.keys(state.alarms).filter(id=>state.alarms[id].enabled);
   if(enabledIds.length===0){ showToastMsg('활성화된 알람이 없습니다'); return; }
+  if(CAP_NATIVE && RingtonePickerPlugin && RingtonePickerPlugin.testAlarmNow){
+    const a = state.alarms[enabledIds[0]];
+    const isCustom = a.sound==='custom' && a.customUri;
+    try{
+      const res = await RingtonePickerPlugin.testAlarmNow({
+        body: getShiftType(enabledIds[0]).name + ' 근무 알람 테스트',
+        sound: isCustom ? a.customUri : (a.sound||'classic')
+      });
+      if(res && res.fullScreenOk === false){ fullScreenAsked = false; maybeAskFullScreenPermission({fullScreenOk:false, count:1}); }
+      return;
+    }catch(e){ /* 예전 APK면 아래 기존 미리듣기 */ }
+  }
   const name = getShiftType(enabledIds[0]).name;
   playAlarmSound(state.alarms[enabledIds[0]].sound);
   if('Notification' in window){

@@ -101,7 +101,9 @@ public class AlarmScheduler {
                 String[] hm = time.split(":");
                 int repeat = Math.max(1, Math.min(10, a.optInt("repeat", 1)));
                 String channelId = a.optString("channelId", "alarm_classic");
+                String sound = a.optString("sound", "classic"); // 기본 알람음 id 또는 사용자가 고른 소리 주소
                 String name = t.optString("name", "");
+                String group = iso + ":" + typeId; // 같은 날·같은 근무의 재알림 묶음
 
                 for (int r = 0; r < repeat; r++) {
                     Calendar fire = (Calendar) day.clone();
@@ -117,6 +119,8 @@ public class AlarmScheduler {
                         .putExtra("title", "⏰ 교대노트 알람")
                         .putExtra("body", name + " 근무 시간이에요" + (r > 0 ? " (재알림 " + (r + 1) + "/" + repeat + ")" : ""))
                         .putExtra("channelId", channelId)
+                        .putExtra("sound", sound)
+                        .putExtra("group", group)
                         .putExtra("notifId", req);
                     PendingIntent pi = PendingIntent.getBroadcast(ctx, req, it,
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
