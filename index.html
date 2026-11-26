@@ -550,7 +550,7 @@
                 </div>
                 <label class="field">시계 앱에 미리 만들어 둘 알람 (레이블을 똑같이)</label>
                 <div id="iphoneAlarmLabels" class="subtext" style="margin-top:0;"></div>
-                <p class="subtext">설정 방법은 저장소의 <b>IPHONE_ALARM.md</b> 안내를 참고하세요. 앱(아이폰·안드로이드 어느 쪽이든)을 60일 이상 안 열면 그 뒤로는 알람이 켜지지 않아요.</p>
+                <p class="subtext">설정 방법은 저장소의 <b>IPHONE_ALARM.md</b> 안내를 참고하세요. 앱(아이폰·안드로이드 어느 쪽이든)을 1년 넘게 한 번도 안 열면 그 뒤로는 알람이 켜지지 않아요.</p>
                 <div class="row" style="margin-top:10px;">
                   <button class="btn" id="iphoneAlarmRegenBtn">🔄 새 주소 만들기</button>
                   <button class="btn" id="iphoneAlarmOffBtn">연동 끄기</button>
@@ -2143,7 +2143,7 @@ function updateNativeNotesWidget(){
 }
 
 const ALARM_ID_BASE = 100000;
-const ALARM_DAYS_AHEAD = 60; // 앞으로 60일치 예약 (반복 최대 5회 x 60일 = 300건 → 안드로이드 앱당 알람 한도 500건 이내)
+const ALARM_DAYS_AHEAD = 60; // (예전 APK용 대체 경로) 60일치 예약 — 새 APK는 네이티브가 매일 자동 재예약
 let alarmRescheduleChain = Promise.resolve();
 let alarmRescheduleTimer = null;
 let lastAlarmSummary = null;
@@ -2158,9 +2158,66 @@ function rescheduleLocalAlarms(){
     }, 300);
   });
 }
+// 네이티브 알람 예약기(AlarmScheduler)에 넘길 "근무 순환 규칙".
+// 네이티브가 이걸로 매일 스스로 다음 알람을 계산하므로, 앱을 오래 안 열어도 알람이 끊기지 않는다.
+function buildNativeAlarmModel(){
+  const team = state.teams.find(t=>t.id===state.myTeamId);
+  const todayISO = isoDate(new Date());
+  const overrides = {};
+  Object.keys(state.overrides).forEach(iso=>{
+    if(iso < todayISO) return;
+    const v = state.overrides[iso][state.myTeamId];
+    if(v === undefined) return;
+    const st = resolveOverrideType(v);
+    overrides[iso] = st ? st.id : ''; // 근무유형이 아닌 예전 자유 라벨은 알람 없음
+  });
+  const types = {};
+  state.shiftTypes.forEach(st=>{
+    const a = state.alarms[st.id];
+    const isCustom = a && a.sound==='custom' && a.customUri;
+    types[st.id] = {
+      name: st.name,
+      usable: isTypeUsable(st),
+      alarm: a ? {
+        enabled: !!a.enabled, time: a.time || '', repeat: a.repeat || 1,
+        channelId: isCustom ? customChannelIdFor(st.id, a.customUri) : 'alarm_'+(a.sound||'classic')
+      } : null
+    };
+  });
+  return { refDate: isoDate(state.referenceDate), sequence: team ? team.sequence : [], overrides, types };
+}
+async function cancelLocalNotificationAlarms(){
+  try{
+    const pending = await LocalNotificationsPlugin.getPending();
+    const ids = (pending.notifications||[]).filter(n=>n.id>=ALARM_ID_BASE).map(n=>({id:n.id}));
+    if(ids.length) await LocalNotificationsPlugin.cancel({ notifications: ids });
+  }catch(e){}
+}
+function announceAlarmSummary(count, nextMs){
+  const summary = count>0 ? `${count}|${nextMs}` : '0';
+  if(lastAlarmSummary!==null && summary!==lastAlarmSummary){
+    if(count>0){
+      const t = new Date(nextMs);
+      showToastMsg(`⏰ 알람 예약됨 (다음: ${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')})`);
+    } else {
+      showToastMsg('예약된 알람이 없어요');
+    }
+  }
+  lastAlarmSummary = summary;
+}
+
 async function doRescheduleLocalAlarms(){
   if(!CAP_NATIVE || !LocalNotificationsPlugin) return;
   lastAlarmRescheduleAt = Date.now();
+  // 1순위: 네이티브 자동 재예약 (매일 스스로 갱신, 재부팅 후에도 복구)
+  if(RingtonePickerPlugin){
+    try{
+      const res = await RingtonePickerPlugin.setAlarmModel({ model: buildNativeAlarmModel() });
+      await cancelLocalNotificationAlarms(); // 예전 방식으로 예약해둔 알람이 있으면 중복되지 않게 정리
+      announceAlarmSummary(res.count||0, res.next||0);
+      return;
+    }catch(e){ /* 네이티브 예약기가 없는 예전 APK면 아래 기존 방식으로 */ }
+  }
   try{
     const pending = await LocalNotificationsPlugin.getPending();
     if(pending.notifications && pending.notifications.length){
@@ -3668,10 +3725,10 @@ document.getElementById('todayBtn').onclick=()=>{
 })();
 
 // ================= 아이폰 시계 알람 연동 (단축어) =================
-// 아이폰 웹앱은 정해진 시각에 알람을 울릴 수 없어서, 앞으로 60일 동안 "그날 켤 시계 알람 레이블"을 서버 문서로 올려두고
+// 아이폰 웹앱은 정해진 시각에 알람을 울릴 수 없어서, 앞으로 1년 동안 "그날 켤 시계 알람 레이블"을 서버 문서로 올려두고
 // 아이폰 단축어 자동화가 매일 그 문서를 읽어 시계 앱 알람을 켜고 끄게 한다. (안내: IPHONE_ALARM.md)
 const IPHONE_ALARM_PREFIX = '교대노트';
-const IPHONE_ALARM_DAYS = 60;
+const IPHONE_ALARM_DAYS = 365; // 1년치 (앱을 열 때마다 다시 1년치로 갱신)
 let lastIphoneAlarmPayloadJSON = null;
 function iphoneAlarmLabelFor(st){ return IPHONE_ALARM_PREFIX+' '+st.name; }
 function yyyymmdd(d){ return isoDate(d).replace(/-/g,''); }

@@ -47,10 +47,26 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      # 서명 키는 저장소가 아닌 GitHub Secrets에만 보관 (설정 → Secrets and variables → Actions)
+      # 필요한 Secrets: SHIFTNOTE_KEYSTORE_BASE64, SHIFTNOTE_KEYSTORE_PASSWORD, SHIFTNOTE_KEY_ALIAS, SHIFTNOTE_KEY_PASSWORD
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SHIFTNOTE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::SHIFTNOTE_KEYSTORE_BASE64 시크릿이 없습니다. 서명 키 없이 빌드하면 업데이트 설치가 안 되므로 중단합니다."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/shiftnote.keystore"
+          echo "SHIFTNOTE_KEYSTORE=$RUNNER_TEMP/shiftnote.keystore" >> "$GITHUB_ENV"
+
       - name: Build debug APK
         working-directory: android
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
+          SHIFTNOTE_KEYSTORE_PASSWORD: ${{ secrets.SHIFTNOTE_KEYSTORE_PASSWORD }}
+          SHIFTNOTE_KEY_ALIAS: ${{ secrets.SHIFTNOTE_KEY_ALIAS }}
+          SHIFTNOTE_KEY_PASSWORD: ${{ secrets.SHIFTNOTE_KEY_PASSWORD }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK

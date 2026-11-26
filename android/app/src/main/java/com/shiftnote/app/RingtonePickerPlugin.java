@@ -184,6 +184,22 @@ public class RingtonePickerPlugin extends Plugin {
     }
 
     /**
+     * 근무표 알람 규칙을 넘겨받아 네이티브에서 직접 예약한다 (AlarmScheduler 참고).
+     * model이 없으면 알람 전부 해제. 결과: {count: 등록한 알람 수, next: 다음 알람 시각(ms, 없으면 0)}
+     */
+    @PluginMethod
+    public void setAlarmModel(PluginCall call) {
+        JSObject model = call.getObject("model");
+        Context context = getContext();
+        AlarmScheduler.saveModel(context, model != null ? model.toString() : null);
+        org.json.JSONObject r = AlarmScheduler.scheduleAll(context);
+        JSObject ret = new JSObject();
+        ret.put("count", r.optInt("count", 0));
+        ret.put("next", r.optLong("next", 0L));
+        call.resolve(ret);
+    }
+
+    /**
      * 4x1 메모/일정 위젯 갱신 (예전엔 JS가 이 메서드를 불렀지만 네이티브에 없어서 위젯이 항상 "일정 없음"이었음)
      * today/upcoming: 지금 기준으로 계산된 문자열, items: 날짜가 바뀌어도 다시 계산할 수 있도록 넘기는 메모 목록
      */
