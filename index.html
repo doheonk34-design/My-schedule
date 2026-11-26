@@ -488,7 +488,11 @@
   }
   .modal-note-row .mn-time{font-family:'JetBrains Mono',monospace; color:var(--standby); flex-shrink:0;}
   .modal-note-row .mn-text{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .modal-note-row .mn-del{background:none; border:none; color:var(--sub); cursor:pointer; font-size:12px; flex-shrink:0;}
+  .modal-note-row .mn-del,.modal-note-row .mn-edit{background:none; border:none; color:var(--sub); cursor:pointer; font-size:12px; flex-shrink:0; padding:2px 4px;}
+  .modal-note-row.editing{border-color:var(--standby);}
+  .modal-note-row .mn-text.tappable{cursor:pointer;}
+  .mn-time-clear{background:none; border:none; color:var(--sub); cursor:pointer; font-size:11px; padding:0 4px; flex-shrink:0;}
+  .modal-note-edit-bar{display:none; align-items:center; justify-content:space-between; margin-top:6px; font-size:11px; color:var(--standby);}
   .modal-note-add{display:flex; gap:6px; margin-top:8px;}
   .modal-note-time-slot{width:88px; flex-shrink:0;}
   .modal-note-add input[type=text]{flex:1;}
@@ -762,6 +766,7 @@
       <button id="notesViewClose">✕</button>
     </div>
     <div id="notesViewList"></div>
+    <button class="btn block" id="notesViewEdit" style="margin-top:10px;">✏️ 메모 수정·삭제</button>
   </div>
 </div>
 
@@ -793,6 +798,10 @@
         <div class="modal-note-time-slot" id="modalNoteTimeSlot"></div>
         <input type="text" id="modalNoteText" placeholder="예: 병원 예약, 회식 등">
         <button class="btn small" id="modalNoteAdd">+ 일정 추가</button>
+      </div>
+      <div class="modal-note-edit-bar" id="modalNoteEditBar">
+        <span>✏️ 메모 수정 중</span>
+        <button class="btn small" id="modalNoteEditCancel">수정 취소</button>
       </div>
     </div>
 
@@ -1113,6 +1122,14 @@ function addNote(date, time, text){
   const iso = isoDate(date);
   if(!state.notes[iso]) state.notes[iso] = [];
   state.notes[iso].push({id:'note'+(++noteSeq), time: time||null, text});
+}
+function updateNote(date, noteId, time, text){
+  const list = state.notes[isoDate(date)];
+  const n = list && list.find(x=>x.id===noteId);
+  if(!n) return false;
+  n.time = time || null;
+  n.text = text;
+  return true;
 }
 function deleteNote(date, noteId){
   const iso = isoDate(date);
@@ -2659,6 +2676,7 @@ let modalOverrideSnapshot; // 모달 열기 전 '나의 근무조' 해당 날짜
 // ================= 일정/메모 읽기전용 팝업 (수정모드가 아닐 때 메모 있는 칸 탭하면 뜸) =================
 const notesViewModal = document.getElementById('notesViewModal');
 function openNotesViewModal(date){
+  notesViewDate = date;
   document.getElementById('notesViewDate').textContent = (date.getMonth()+1)+'월 '+date.getDate()+'일 ('+weekdayNames[date.getDay()]+')';
   const listEl = document.getElementById('notesViewList');
   listEl.innerHTML='';
@@ -2673,7 +2691,12 @@ function openNotesViewModal(date){
   });
   notesViewModal.classList.add('show');
 }
+let notesViewDate = null;
 document.getElementById('notesViewClose').onclick = ()=> notesViewModal.classList.remove('show');
+document.getElementById('notesViewEdit').onclick = ()=>{
+  notesViewModal.classList.remove('show');
+  if(notesViewDate) openEditModal(notesViewDate);
+};
 notesViewModal.addEventListener('click', (e)=>{ if(e.target===notesViewModal) notesViewModal.classList.remove('show'); });
 
 // ================= 메모 팝업 날짜 선택 (양력/음력, 1950-01-01 ~ 오늘로부터 50년 후) =================
@@ -2827,6 +2850,9 @@ function openEditModal(date){
 
   renderModalTeamSelect();
   renderModalDateResolved();
+  editingNoteId = null;
+  setNoteEditUi(false);
+  document.getElementById('modalNoteText').value = '';
   renderModalNotes();
   resetModalNoteTimePicker();
   editModal.classList.add('show');
@@ -2861,10 +2887,15 @@ function renderModalNotes(){
     row.className='modal-note-row';
     row.innerHTML = `
       ${n.time ? `<span class="mn-time">${n.time}</span>` : ''}
-      <span class="mn-text">${escapeHtml(n.text)}</span>
+      <span class="mn-text tappable">${escapeHtml(n.text)}</span>
+      <button class="mn-edit" title="수정">✏️</button>
       <button class="mn-del" title="삭제">✕</button>
     `;
+    if(n.id===editingNoteId) row.classList.add('editing');
+    row.querySelector('.mn-edit').onclick = ()=> startNoteEdit(n);
+    row.querySelector('.mn-text').onclick = ()=> startNoteEdit(n);
     row.querySelector('.mn-del').onclick = ()=>{
+      if(n.id===editingNoteId) cancelNoteEdit();
       deleteNote(modalDate, n.id);
       renderModalNotes();
       renderCalendar();
@@ -2880,18 +2911,59 @@ function renderModalNotes(){
 }
 
 let modalNoteTimeValue = '';
-function resetModalNoteTimePicker(){
+let editingNoteId = null;
+function resetModalNoteTimePicker(initial){
   const slot = document.getElementById('modalNoteTimeSlot');
   slot.innerHTML = '';
-  modalNoteTimeValue = '';
-  slot.appendChild(createTimePicker('', (val)=>{ modalNoteTimeValue = val; }));
+  modalNoteTimeValue = initial || '';
+  slot.style.display = 'flex';
+  slot.style.alignItems = 'center';
+  slot.appendChild(createTimePicker(modalNoteTimeValue, (val)=>{ modalNoteTimeValue = val; addClear(); }));
+  // 시간을 골랐다가 "시간 없는 메모"로 되돌릴 수 있게
+  function addClear(){
+    if(slot.querySelector('.mn-time-clear')) return;
+    const clr = document.createElement('button');
+    clr.type = 'button'; clr.className = 'mn-time-clear'; clr.title = '시간 지우기'; clr.textContent = '✕';
+    clr.onclick = (e)=>{ e.stopPropagation(); resetModalNoteTimePicker(''); };
+    slot.appendChild(clr);
+  }
+  if(modalNoteTimeValue) addClear();
 }
+function setNoteEditUi(editing){
+  document.getElementById('modalNoteAdd').textContent = editing ? '✓ 수정 저장' : '+ 일정 추가';
+  document.getElementById('modalNoteEditBar').style.display = editing ? 'flex' : 'none';
+}
+function startNoteEdit(n){
+  editingNoteId = n.id;
+  const textEl = document.getElementById('modalNoteText');
+  textEl.value = n.text;
+  resetModalNoteTimePicker(n.time || '');
+  setNoteEditUi(true);
+  renderModalNotes();
+  textEl.focus();
+}
+function cancelNoteEdit(){
+  editingNoteId = null;
+  document.getElementById('modalNoteText').value = '';
+  resetModalNoteTimePicker();
+  setNoteEditUi(false);
+  renderModalNotes();
+}
+document.getElementById('modalNoteEditCancel').onclick = cancelNoteEdit;
 
 function submitModalNote(){
   const textEl = document.getElementById('modalNoteText');
   const text = textEl.value.trim();
   if(!text){ showToastMsg('메모 내용을 입력해주세요'); return; }
-  addNote(modalDate, modalNoteTimeValue, text);
+  let msg = '일정이 저장되었습니다 ✓';
+  if(editingNoteId){
+    if(!updateNote(modalDate, editingNoteId, modalNoteTimeValue, text)) addNote(modalDate, modalNoteTimeValue, text);
+    msg = '메모를 수정했어요 ✓';
+    editingNoteId = null;
+    setNoteEditUi(false);
+  } else {
+    addNote(modalDate, modalNoteTimeValue, text);
+  }
   textEl.value='';
   resetModalNoteTimePicker();
   renderModalNotes();
@@ -2902,7 +2974,7 @@ function submitModalNote(){
   pushStateToShare();
   pushStateToCalSub();
   pushStateToCalSubMemo();
-  showToastMsg('일정이 저장되었습니다 ✓');
+  showToastMsg(msg);
   textEl.focus();
 }
 document.getElementById('modalNoteAdd').onclick = submitModalNote;
