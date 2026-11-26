@@ -49,6 +49,8 @@ public class ShiftCalendarWidgetProvider extends AppWidgetProvider {
         }
         // 30분마다 호출될 때 칸도 다시 그려서, 자정이 지나면 "오늘" 표시가 옮겨가고 달이 바뀌면 새 달로 바뀜
         appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.cal_grid);
+        // 동기화 중이면 다른 기기에서 바꾼 근무표도 반영
+        WidgetSync.refreshAsync(context, goAsync(), null);
     }
 
     private void updateOne(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {

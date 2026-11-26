@@ -20,7 +20,9 @@ public class AlarmReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         if (AlarmScheduler.ACTION_REFRESH.equals(action)) {
-            AlarmScheduler.scheduleAll(context);
+            // 다른 기기에서 바꾼 근무표가 있으면 먼저 받아 반영한 뒤 알람 재계산
+            final Context app = context.getApplicationContext();
+            WidgetSync.refreshAsync(context, goAsync(), () -> AlarmScheduler.scheduleAll(app));
             return;
         }
         if (!AlarmScheduler.ACTION_FIRE.equals(action)) return;

@@ -48,6 +48,8 @@ public class ShiftWidgetProvider extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             updateOne(context, appWidgetManager, id);
         }
+        // 동기화 중이면 다른 기기에서 바꾼 근무표도 반영 (5분 안 중복 요청은 WidgetSync가 생략)
+        WidgetSync.refreshAsync(context, goAsync(), null);
     }
 
     private void updateOne(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {

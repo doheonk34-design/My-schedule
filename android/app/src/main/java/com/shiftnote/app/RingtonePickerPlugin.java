@@ -216,13 +216,10 @@ public class RingtonePickerPlugin extends Plugin {
             .putString(ShiftNotesWidgetProvider.PREF_UPCOMING, upcoming);
         if (items != null) editor.putString(ShiftNotesWidgetProvider.PREF_ITEMS, items.toString());
         else editor.remove(ShiftNotesWidgetProvider.PREF_ITEMS);
-        // 동기화 문서 주소: 위젯이 30분마다 서버에서 다른 기기의 메모까지 직접 가져오는 데 사용
-        String syncUrl = call.getString("syncUrl");
-        if (syncUrl != null && !syncUrl.isEmpty()) editor.putString(ShiftNotesWidgetProvider.PREF_SYNC_URL, syncUrl);
-        else editor.remove(ShiftNotesWidgetProvider.PREF_SYNC_URL);
-        Double knownVersion = call.getDouble("knownVersion");
-        editor.putLong(ShiftNotesWidgetProvider.PREF_KNOWN_VERSION, knownVersion != null ? knownVersion.longValue() : 0L);
         editor.commit();
+        // 동기화 문서 주소: 위젯·알람이 앱을 안 열어도 서버에서 다른 기기의 변경을 직접 가져오는 데 사용 (WidgetSync)
+        Double knownVersion = call.getDouble("knownVersion");
+        WidgetSync.saveConfig(context, call.getString("syncUrl"), knownVersion != null ? knownVersion.longValue() : 0L);
 
         ShiftNotesWidgetProvider.updateAll(context);
         call.resolve();
