@@ -65,11 +65,13 @@ export default {
 
 // ---- 아이폰 단축어용 오늘 알람 레이블 ----
 // 앱이 올려둔 "날짜별 켤 알람 레이블"(plan: { d20261128: '교대노트 [주]', ... })에서 오늘 값을 꺼내 글자로 돌려줌.
-// 종료·없는 코드, 오늘 알람이 없는 날은 빈 글자 → 단축어는 교대노트 알람을 모두 끈 상태로 둠.
+// 종료·없는 코드, 오늘 알람이 없는 날은 "-" → 단축어는 교대노트 알람을 모두 끈 상태로 둠.
+// (빈 글자 대신 "-": 단축어는 빈 글자를 파일로 저장하지 못하고, "-"는 어떤 알람 레이블에도 들어있지 않음)
 async function alarmLabelResponse(docUrl) {
   const textHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' };
   const res = await fetch(docUrl);
-  if (res.status === 404) return new Response('', { headers: textHeaders });
+  const NONE = '-';
+  if (res.status === 404) return new Response(NONE, { headers: textHeaders });
   if (!res.ok) {
     // 일시적 오류: 단축어가 실패하게 두면 시계 알람이 전날 상태 그대로 유지됨 (잘못 꺼지지 않도록)
     return new Response('서버 오류', { status: 502, headers: textHeaders });
@@ -77,10 +79,10 @@ async function alarmLabelResponse(docUrl) {
   const doc = await res.json();
   const data = doc.fields ? decodeFirestoreFields(doc.fields) : {};
   if (data.revoked === true || data.kind !== 'iphone_alarm_plan' || !data.plan) {
-    return new Response('', { headers: textHeaders });
+    return new Response(NONE, { headers: textHeaders });
   }
   const key = 'd' + isoDate(kstNow()).replace(/-/g, '');
-  const label = typeof data.plan[key] === 'string' ? data.plan[key] : '';
+  const label = typeof data.plan[key] === 'string' && data.plan[key] ? data.plan[key] : NONE;
   return new Response(label, { headers: textHeaders });
 }
 
