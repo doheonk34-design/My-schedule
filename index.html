@@ -3063,7 +3063,8 @@ function buildSyncPayload(){
   return {
     shiftTypes: state.shiftTypes, teams: state.teams, myTeamId: state.myTeamId,
     referenceDate: isoDate(state.referenceDate), shiftTimes: state.shiftTimes,
-    alarms: state.alarms, overrides: state.overrides, notes: state.notes, widgetSize: state.widgetSize,
+    alarms: state.alarms, overrides: overridesAsLabels(), // 예전 버전 앱과 호환되도록 이름 형식으로 올림 (받는 쪽 새 버전은 다시 id로 변환)
+    notes: state.notes, widgetSize: state.widgetSize,
     shareCode: state.shareCode, shareCodeHistory: state.shareCodeHistory,
     calSubCode: state.calSubCode, calSubCodeHistory: state.calSubCodeHistory,
     calSubMemoCode: state.calSubMemoCode, calSubMemoCodeHistory: state.calSubMemoCodeHistory,

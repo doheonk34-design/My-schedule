@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shift-note-cache-v4';
+const CACHE_NAME = 'shift-note-cache-v5';
 const FONT_CACHE_NAME = 'shift-note-fonts-v1';
 const ASSETS = [
   './',
@@ -12,7 +12,7 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
   );
   self.skipWaiting();
 });
