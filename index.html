@@ -590,7 +590,7 @@
         <button class="btn" id="settingsCancelBtn">취소</button>
         <button class="btn primary" id="settingsSaveBtn">저장</button>
       </div>
-      <div style="text-align:center; font-size:9px; color:var(--sub); margin-top:8px;">빌드: 2026-08-22 21:40 KST</div>
+      <div id="buildLabel" style="text-align:center; font-size:9px; color:var(--sub); margin-top:8px;">빌드 정보 확인 중</div>
     </div>
   </div>
 
@@ -4029,7 +4029,44 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('./sw.js').catch(()=>{ /* 등록 실패는 조용히 무시 (오프라인 캐싱만 안 될 뿐 앱은 정상 동작) */ });
   });
+  // 서비스 워커가 백그라운드에서 받아온 새 화면이 지금 화면과 다르면 알려줌 → 새로고침 안내
+  navigator.serviceWorker.addEventListener('message', (e)=>{
+    if(e.data && e.data.type==='shiftnote-update' && !CAP_NATIVE) showUpdateBanner();
+  });
 }
+function showUpdateBanner(){
+  if(document.getElementById('updateBanner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'updateBanner';
+  bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:16px;z-index:99999;display:flex;align-items:center;gap:10px;'+
+    'padding:12px 14px;border-radius:12px;background:#1F2633;border:1px solid #37D6B0;color:#E7EAF0;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);';
+  const txt = document.createElement('span');
+  txt.style.flex = '1';
+  txt.textContent = '🔄 새 버전이 있어요';
+  const btn = document.createElement('button');
+  btn.className = 'btn primary small';
+  btn.textContent = '새로고침';
+  btn.onclick = ()=>{ saveState(); location.reload(); };
+  const close = document.createElement('button');
+  close.className = 'btn small';
+  close.textContent = '나중에';
+  close.onclick = ()=> bar.remove();
+  bar.append(txt, btn, close);
+  document.body.appendChild(bar);
+}
+
+// ---- 설정 화면 맨 아래 빌드 표시 ----
+// APK는 빌드할 때 워크플로가 아래 값을 "APK #번호 · 날짜"로 바꿔 넣고,
+// 웹앱은 서버가 알려주는 파일 수정 시각(=GitHub Pages 배포 시각)을 보여줌
+const BUILD_TAG = '__SHIFTNOTE_BUILD__';
+(function renderBuildLabel(){
+  const el = document.getElementById('buildLabel');
+  if(!el) return;
+  if(!/^__/.test(BUILD_TAG)){ el.textContent = '빌드: ' + BUILD_TAG; return; }
+  const d = new Date(document.lastModified);
+  el.textContent = isNaN(d) ? '웹 버전'
+    : '웹 버전 · ' + isoDate(d) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ' 배포';
+})();
 </script>
 </body>
 </html>

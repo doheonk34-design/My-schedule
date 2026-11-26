@@ -1,43 +1,55 @@
-# 교대노트 — 안드로이드 APK 자동빌드
+# 교대노트
 
-이 저장소를 GitHub에 올리면, GitHub Actions가 자동으로 APK를 빌드해줍니다.
-Android Studio나 SDK를 직접 설치할 필요가 없습니다.
+교대근무 스케줄·알람·메모 앱입니다. 한 저장소에서 두 가지로 배포됩니다.
+
+- **아이폰 등 웹앱(PWA)**: GitHub Pages가 저장소 최상위 파일(`index.html` 등)을 그대로 서비스합니다. 홈 화면에 추가해서 씁니다.
+- **안드로이드 앱(APK)**: GitHub Actions가 같은 `index.html`을 Capacitor로 감싸 APK를 빌드합니다. 홈 화면 위젯 3종과 네이티브 알람이 들어 있습니다.
 
 ## 폴더 구조
 
 ```
-index.html, manifest.json, sw.js, icon-*.png   ← GitHub Pages(아이폰 PWA)가 서빙하는 "진짜" 원본
-www/                                            ← APK 빌드용 폴더 (빌드할 때마다 위 원본을 자동 복사해감)
-android/                                        ← Capacitor가 생성한 안드로이드 네이티브 프로젝트
-.github/workflows/build-apk.yml                 ← 자동 빌드 설정
+index.html, manifest.json, sw.js, icon-*.png   ← 앱 화면 원본 (PWA·APK 공통, 이것만 수정)
+android/                                        ← 안드로이드 네이티브 프로젝트 (위젯·알람·플러그인 Java 코드)
+worker/calendar-worker.js                       ← 캘린더 구독 주소를 만드는 Cloudflare 워커 코드
+firestore.rules                                 ← Firestore 보안 규칙 (Firebase 콘솔에 게시해서 적용)
+IPHONE_ALARM.md                                 ← 아이폰 시계 알람 연동(단축어) 설정 안내
+.github/workflows/build-apk.yml                 ← APK 자동 빌드
 ```
 
-**중요**: `index.html`은 **저장소 최상위 것 하나만 관리하면 됩니다.**
-`www/index.html`은 빌드할 때마다 자동으로 최신 내용으로 덮어써지므로 따로 손댈 필요 없어요.
+`www/`와 `android/app/src/main/assets/public/`은 빌드할 때 자동으로 만들어지는 복사본이라 저장소에 올리지 않습니다.
 
-## 사용 방법
+## 앱 화면을 수정하려면
 
-1. 이 프로젝트 파일 전체(`www`, `android`, `.github` 폴더 포함)를 GitHub 저장소에 업로드합니다.
-   - `node_modules`, `android/app/build` 폴더는 올릴 필요 없습니다 (자동 생성됨).
-2. 저장소 상단 **Actions** 탭 클릭 → **Build Android APK** 워크플로우가 자동으로 실행되는 걸 확인합니다.
-3. 빌드가 끝나면(초록 체크 ✅) 그 실행 결과 페이지 맨 아래 **Artifacts** 섹션에서
-   `shift-note-debug-apk`를 다운로드합니다. (zip 파일 안에 `.apk`가 들어있음)
-4. 압축을 풀어 `.apk` 파일을 갤럭시로 옮긴 뒤 설치합니다.
-   - 처음 설치 시 "출처를 알 수 없는 앱" 허용이 필요할 수 있습니다 (설정 → 보안).
+1. 저장소 최상위 `index.html`을 수정하고 `main`에 커밋·푸시합니다.
+2. 웹앱(PWA)은 GitHub Pages가 자동으로 갱신합니다. 앱을 열면 "새 버전이 있어요" 안내가 뜨고, 새로고침하면 반영됩니다.
+3. APK는 Actions 탭의 **Build Android APK**가 자동으로 빌드합니다. 끝나면 실행 결과 페이지 맨 아래 **Artifacts**에서 `shift-note-debug-apk`를 받습니다.
 
-## 앱 화면을 수정한 뒤 업데이트하려면
+## APK 서명 키 (중요)
 
-1. 저장소 최상위 `index.html`만 새 버전으로 교체 (PWA/APK 둘 다 이거 하나로 반영됨)
-2. 커밋 & 푸시
-3. Actions 탭에서 새 빌드가 자동으로 돌고, 새 APK를 다시 다운로드하면 됩니다.
+안드로이드는 **같은 서명 키로 만든 APK만 업데이트로 설치**해 줍니다. 서명 키는 저장소에 두지 않고 GitHub Secrets에만 보관합니다.
 
-## 아이폰 알람
+저장소 Settings → Secrets and variables → Actions에 아래 4개가 있어야 빌드됩니다(없으면 빌드가 일부러 중단됩니다).
 
-아이폰 웹앱은 알람을 직접 울릴 수 없어서, 단축어 자동화로 시계 앱 알람을 켜고 끕니다.
-설정 방법은 [IPHONE_ALARM.md](IPHONE_ALARM.md)를 참고하세요.
+| 이름 | 내용 |
+|---|---|
+| `SHIFTNOTE_KEYSTORE_BASE64` | 키 파일(`shiftnote.keystore`)을 base64로 바꾼 값 |
+| `SHIFTNOTE_KEYSTORE_PASSWORD` | 키 저장소 비밀번호 |
+| `SHIFTNOTE_KEY_ALIAS` | 키 별칭 (`shiftnote`) |
+| `SHIFTNOTE_KEY_PASSWORD` | 키 비밀번호 |
 
-## 참고
+키 원본은 저장소 밖에 따로 백업해 두세요. **키를 잃어버리면 다음 업데이트 때 앱을 지우고 새로 설치해야 합니다.**
 
-- 지금 만들어지는 건 **디버그 APK**입니다 (테스트/개인 설치용). 구글 플레이스토어에 정식 등록하려면
-  서명(release) 빌드와 개발자 계정이 별도로 필요합니다.
-- 홈 화면 "진짜 위젯"은 이 방식(웹뷰 감싸기)으로는 만들 수 없고, 별도 네이티브(Kotlin) 코드가 필요합니다.
+## 알람
+
+- **안드로이드**: 네이티브가 앞으로 14일치 알람을 등록하고 매일 스스로 다시 계산합니다. 재부팅·앱 업데이트 후에도 다시 등록되므로 앱을 열지 않아도 계속 울립니다. 처음 실행할 때 알림·정확한 알람 권한을 허용해야 합니다.
+- **아이폰**: 웹앱은 알람을 직접 울릴 수 없어서, 단축어 자동화로 시계 앱 알람을 켜고 끕니다. [IPHONE_ALARM.md](IPHONE_ALARM.md)를 참고하세요.
+
+## 홈 화면 위젯 (안드로이드)
+
+오늘 근무, 한 달 달력, 메모(오늘/다가오는 일정) 위젯이 있습니다. 앱을 안 열어도 날짜가 바뀌면 30분 안에 갱신되고, 기기 간 동기화를 쓰는 경우 다른 기기에서 바꾼 근무표·메모도 30분마다 가져옵니다.
+
+## 서버 (Firebase / Cloudflare)
+
+- **Firestore**: 기기 간 동기화(`shiftNoteSync`), 공유 링크·캘린더 구독·아이폰 알람 계획(`shiftNoteShare`)을 저장합니다. 앱에 로그인 기능이 없어서 **8자리 코드가 곧 열쇠**입니다. 코드를 남에게 보여주지 마세요.
+- **보안 규칙**: `firestore.rules`를 수정했다면 Firebase 콘솔 → Firestore → 규칙에 붙여넣고 게시해야 적용됩니다.
+- **캘린더 구독 워커**: `worker/calendar-worker.js`를 Cloudflare 대시보드의 워커 코드 편집 화면에 붙여넣고 배포합니다. 끄거나 없어진 구독에는 빈 캘린더를 돌려줘서, 캘린더 앱이 예전 일정을 지우게 합니다.

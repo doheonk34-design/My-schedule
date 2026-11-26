@@ -8,3 +8,6 @@ android/local.properties
 # 서명 키는 저장소에 올리지 않음
 *.keystore
 *.jks
+
+# 빌드 때 자동으로 만들어지는 웹 파일 복사본
+www/
