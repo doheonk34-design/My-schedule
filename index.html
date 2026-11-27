@@ -513,7 +513,8 @@
   .seg button{flex:1; background:none; border:none; color:var(--sub); padding:6px 0; font-size:12px; cursor:pointer;}
   .seg button+button{border-left:1px solid var(--border);}
   .seg button.on{background:var(--panel-alt); color:var(--text); font-weight:700;}
-  .day-cell .half-badge{font-size:8px; font-weight:700; color:#E87BA8; flex-shrink:0;}
+  .seg button:disabled{opacity:.35; cursor:default;}
+  .modal-half-hint{font-size:11px; color:var(--sub); margin:0 0 6px 66px;}
   .leave-summary{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0;}
   .leave-summary div{background:var(--panel-alt); border:1px solid var(--border); border-radius:10px; padding:8px; text-align:center;}
   .leave-summary b{display:block; font-size:18px; font-family:'JetBrains Mono',monospace;}
@@ -615,7 +616,7 @@
         <div class="card card-collapsible collapsed">
           <h3 class="card-toggle">🏖️ 연차 관리<span class="chevron">▾</span></h3>
           <div class="card-body">
-            <p class="subtext" style="margin-top:0;">근무를 <b>연차 근무 유형</b>으로 바꾼 날은 1일, 날짜 수정 화면에서 <b>반차</b>를 고른 날은 0.5일로 세요.</p>
+            <p class="subtext" style="margin-top:0;">날짜 수정 화면에서 근무를 <b>연차 근무 유형</b>으로 바꾸면 1일, 그 아래에서 <b>전반차/후반차</b>를 고르면 0.5일로 세요.</p>
             <label class="field">연차로 셀 근무 유형</label>
             <div class="row">
               <select id="leaveTypeSelect" style="flex:1;"></select>
@@ -873,11 +874,12 @@
     <div class="modal-half-row" id="modalHalfRow">
       <span class="hlabel">반차</span>
       <div class="seg" id="modalHalfSeg">
-        <button type="button" data-half="">없음</button>
+        <button type="button" data-half="">종일 연차</button>
         <button type="button" data-half="am">전반차</button>
         <button type="button" data-half="pm">후반차</button>
       </div>
     </div>
+    <div class="modal-half-hint" id="modalHalfHint"></div>
 
     <div class="modal-notes-section">
       <div class="modal-notes-title">📝 메모 / 일정</div>
@@ -1059,6 +1061,7 @@ function sanitizeLeave(lv){
   if(!isPlainObj(lv)) return out;
   if(typeof lv.typeId==='string' && state.shiftTypes.some(s=>s.id===lv.typeId)) out.typeId = lv.typeId;
   if(lv.basis==='hire') out.basis = 'hire';
+  if(lv.v===2) out.v = 2;
   if(typeof lv.hireDate==='string' && parseIsoDate(lv.hireDate)) out.hireDate = lv.hireDate;
   ['totals','hireTotals'].forEach(k=>{
     if(isPlainObj(lv[k])) Object.keys(lv[k]).forEach(y=>{
@@ -1070,6 +1073,20 @@ function sanitizeLeave(lv){
     if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && (lv.halves[iso]==='am' || lv.halves[iso]==='pm')) out.halves[iso] = lv.halves[iso];
   });
   return out;
+}
+function migrateHalves(prevVersion){
+  const lv = state.leave, lt = lv.typeId;
+  Object.keys(lv.halves).forEach(iso=>{
+    const isLeave = lt && state.overrides[iso] && state.overrides[iso][state.myTeamId]===lt;
+    if(isLeave) return;
+    if(prevVersion!==2 && lt){
+      if(!state.overrides[iso]) state.overrides[iso] = {};
+      state.overrides[iso][state.myTeamId] = lt; // 예전엔 근무를 그대로 두고 반차만 골랐음 → 연차 + 반차로
+    } else if(lt){
+      delete lv.halves[iso]; // 연차가 아닌 날에 남은 반차
+    }
+  });
+  if(lt) lv.v = 2;
 }
 function sanitizeState(){
   state.shiftTypes = (Array.isArray(state.shiftTypes) ? state.shiftTypes : [])
@@ -1113,7 +1130,9 @@ function sanitizeState(){
     if(!state.notes[iso].length) delete state.notes[iso];
   });
   Object.keys(state.alarms).forEach(k=>{ if(!isPlainObj(state.alarms[k])) delete state.alarms[k]; });
+  const rawLeave = state.leave;
   state.leave = sanitizeLeave(state.leave);
+  migrateHalves(isPlainObj(rawLeave) ? rawLeave.v : undefined);
   resyncIdSequences();
 }
 
@@ -1682,8 +1701,7 @@ function buildDayCellEl(date, interactive){
   cell.innerHTML = `
     ${numHtml}
     <div class="mylabel-row">
-      <span class="mylabel" style="color:${mine.color}">${escapeHtml(mine.label)}</span>
-      ${halfLabelFor(date) ? `<span class="half-badge">${halfLabelFor(date)}</span>` : ''}
+      <span class="mylabel" style="color:${mine.color}">${escapeHtml(myLabelFor(date, mine))}</span>
     </div>
     ${noteHtml}
     <div class="dots">${dots.map(d=>`<i style="background:${d.color}" title="${escapeHtml(d.label)}"></i>`).join('')}</div>
@@ -1881,7 +1899,7 @@ function buildMiniDayCellEl(date){
   cell.innerHTML = `
     <div class="mini-top-row">
       <span class="mini-num">${date.getDate()}</span>
-      <span class="mini-mylabel" style="color:${mine.color}">${escapeHtml(mine.label)}</span>
+      <span class="mini-mylabel" style="color:${mine.color}">${escapeHtml(myLabelFor(date, mine))}</span>
     </div>
     ${noteHtml}
     <div class="mini-dots">${dotsHtml}</div>
@@ -2928,13 +2946,26 @@ function onLunarSelectChange(){
 });
 document.getElementById('modalLunarLeap').onchange = onLunarSelectChange;
 
+function isLeaveDay(iso){
+  const lt = state.leave && state.leave.typeId;
+  return !!(lt && state.overrides[iso] && state.overrides[iso][state.myTeamId]===lt);
+}
 function renderModalHalf(){
-  const cur = state.leave.halves[isoDate(modalDate)] || '';
-  document.querySelectorAll('#modalHalfSeg button').forEach(b=> b.classList.toggle('on', b.dataset.half===cur));
+  const iso = isoDate(modalDate);
+  const leaveDay = isLeaveDay(iso);
+  const cur = leaveDay ? (state.leave.halves[iso] || '') : null;
+  document.querySelectorAll('#modalHalfSeg button').forEach(b=>{
+    b.disabled = !leaveDay;
+    b.classList.toggle('on', cur!==null && b.dataset.half===cur);
+  });
+  const hint = document.getElementById('modalHalfHint');
+  if(!state.leave.typeId) hint.textContent = '설정 → 연차 관리에서 연차 근무 유형을 먼저 정해 주세요.';
+  else hint.textContent = leaveDay ? '' : '근무를 "'+getShiftType(state.leave.typeId).name+'"(으)로 바꾸면 반차를 고를 수 있어요.';
 }
 document.querySelectorAll('#modalHalfSeg button').forEach(b=>{
   b.onclick = ()=>{
     const iso = isoDate(modalDate);
+    if(!isLeaveDay(iso)) return;
     if(b.dataset.half) state.leave.halves[iso] = b.dataset.half;
     else delete state.leave.halves[iso];
     renderModalHalf();
@@ -2969,6 +3000,8 @@ function renderModalTeamSelect(){
       const iso2 = isoDate(modalDate);
       if(!state.overrides[iso2]) state.overrides[iso2] = {};
       state.overrides[iso2][state.myTeamId] = e.target.value;
+      if(!isLeaveDay(iso2)) delete state.leave.halves[iso2];
+      renderModalHalf();
       renderCalendar();
       renderNowCard();
     };
@@ -4043,9 +4076,12 @@ document.getElementById('todayBtn').onclick=()=>{
 //  - 입사 후 1년 미만: 1개월 개근마다 1일 (최대 11일)
 //  - 1년 이상: 15일 + 최초 1년을 넘는 근속 2년마다 1일 (최대 25일)
 function halfLabelFor(date){
-  const h = state.leave && state.leave.halves[isoDate(date)];
-  return h==='am' ? '전반' : h==='pm' ? '후반' : '';
+  const iso = isoDate(date);
+  if(!state.leave || !isLeaveDay(iso)) return '';
+  const h = state.leave.halves[iso];
+  return h==='am' ? '전반차' : h==='pm' ? '후반차' : '';
 }
+function myLabelFor(date, mine){ return halfLabelFor(date) || mine.label; }
 function addYearsIso(iso, n){
   const [y,m,d] = iso.split('-').map(Number);
   const dt = new Date(y+n, m-1, d);
@@ -4103,11 +4139,12 @@ function leaveStatsFor(key){
       if(inRange(iso) && state.overrides[iso][state.myTeamId]===typeId) full.push(iso);
     });
   }
-  const fullSet = new Set(full);
-  const half = Object.keys(state.leave.halves).filter(iso=> inRange(iso) && !fullSet.has(iso));
-  const used = full.length + half.length*0.5;
+  // 연차일 중 전반차/후반차를 고른 날은 0.5일
+  const half = full.filter(iso=> state.leave.halves[iso]);
+  const whole = full.filter(iso=> !state.leave.halves[iso]);
+  const used = whole.length + half.length*0.5;
   const total = per.manual!==undefined ? per.manual : per.auto;
-  return {per, full: full.sort(), half: half.sort(), used, total: total===null || total===undefined ? null : total};
+  return {per, full: whole.sort(), half: half.sort(), used, total: total===null || total===undefined ? null : total};
 }
 // 오늘이 들어 있는 기간의 key
 function currentLeaveKey(){
