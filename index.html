@@ -634,14 +634,21 @@
               <div style="text-align:center;"><b id="leaveYearLabel" style="font-size:14px;">2026년</b><div id="leavePeriodSub" class="subtext" style="margin:2px 0 0;"></div></div>
               <button class="btn small" id="leaveNextYear">▶</button>
             </div>
-            <label class="field">총 연차 (일) <span id="leaveAutoHint" style="font-weight:400; color:var(--sub);"></span></label>
+            <label class="field">기본 연차 (일) <span id="leaveAutoHint" style="font-weight:400; color:var(--sub);"></span></label>
             <input type="number" id="leaveTotalInput" min="0" max="365" step="0.5" inputmode="decimal" placeholder="직접 입력">
             <div class="leave-summary">
               <div><b id="leaveUsedNum">0</b><span>사용</span></div>
               <div><b id="leaveRemainNum">-</b><span>남음</span></div>
               <div><b id="leaveTotalNum">-</b><span>총 연차</span></div>
             </div>
-            <div class="leave-list" id="leaveList"></div>
+            <div class="leave-list" id="leaveCalcNote" style="margin-bottom:8px;"></div>
+            <label class="field">잔여 연차 직접 맞추기 <span style="font-weight:400; color:var(--sub);">— 회사 기록과 다를 때 (이 기간만)</span></label>
+            <div class="row">
+              <input type="number" id="leaveRemainInput" step="0.5" inputmode="decimal" placeholder="예: 2.5" style="flex:1;">
+              <button class="btn" id="leaveRemainApply">맞추기</button>
+              <button class="btn" id="leaveAdjReset">보정 지우기</button>
+            </div>
+            <div class="leave-list" id="leaveList" style="margin-top:10px;"></div>
           </div>
         </div>
 
@@ -998,7 +1005,8 @@ const state = {
   shiftTimes: {},           // shiftType.id -> {start,end}
   alarms: {},               // shiftType.id -> {enabled, before}
   overrides: {},            // { 'YYYY-MM-DD': { teamId: label } }
-  leave: {typeId:null, basis:'calendar', hireDate:null, totals:{}, hireTotals:{}, halves:{}},
+  leave: {typeId:null, basis:'calendar', hireDate:null, totals:{}, hireTotals:{}, adjust:{}, hireAdjust:{}, halves:{}},
+  // adjust/hireAdjust: 기간별 보정(앱 밖에서 쓴 연차 등, 사용 일수에 더함)
   // 연차: 연차로 셀 근무유형 id, 집계 기준(1~12월/입사일), 입사일, 직접 입력한 총 연차(기간 시작 연도별), 반차 날짜('am'|'pm')
   notes: {},                // { 'YYYY-MM-DD': [ {id, time, text} ] }
   widgetSize: '4x1',        // '4x1' | '4x3' | '4x4'
@@ -1057,7 +1065,7 @@ function resyncIdSequences(){
   }));
 }
 function sanitizeLeave(lv){
-  const out = {typeId:null, basis:'calendar', hireDate:null, totals:{}, hireTotals:{}, halves:{}};
+  const out = {typeId:null, basis:'calendar', hireDate:null, totals:{}, hireTotals:{}, adjust:{}, hireAdjust:{}, halves:{}};
   if(!isPlainObj(lv)) return out;
   if(typeof lv.typeId==='string' && state.shiftTypes.some(s=>s.id===lv.typeId)) out.typeId = lv.typeId;
   if(lv.basis==='hire') out.basis = 'hire';
@@ -1067,6 +1075,12 @@ function sanitizeLeave(lv){
     if(isPlainObj(lv[k])) Object.keys(lv[k]).forEach(y=>{
       const n = Number(lv[k][y]);
       if(/^\d{4}$/.test(y) && isFinite(n) && n>=0 && n<=365) out[k][y] = Math.round(n*2)/2;
+    });
+  });
+  ['adjust','hireAdjust'].forEach(k=>{
+    if(isPlainObj(lv[k])) Object.keys(lv[k]).forEach(y=>{
+      const n = Number(lv[k][y]);
+      if(/^\d{4}$/.test(y) && isFinite(n) && n!==0 && Math.abs(n)<=365) out[k][y] = Math.round(n*2)/2;
     });
   });
   if(isPlainObj(lv.halves)) Object.keys(lv.halves).forEach(iso=>{
@@ -4129,7 +4143,9 @@ function leavePeriod(key){
   }
   return {start, end, label: key+'년', sub: '1월 1일 ~ 12월 31일', auto, autoNote, manual: lv.totals[String(key)]};
 }
-function leaveStatsFor(key){
+function leaveAdjustMap(){ return state.leave.basis==='hire' && state.leave.hireDate ? state.leave.hireAdjust : state.leave.adjust; }
+function leaveStatsFor(key, depth){
+  depth = depth || 0;
   const per = leavePeriod(key);
   const inRange = (iso)=> iso >= per.start && iso <= per.end;
   const typeId = state.leave.typeId;
@@ -4142,9 +4158,19 @@ function leaveStatsFor(key){
   // 연차일 중 전반차/후반차를 고른 날은 0.5일
   const half = full.filter(iso=> state.leave.halves[iso]);
   const whole = full.filter(iso=> !state.leave.halves[iso]);
-  const used = whole.length + half.length*0.5;
-  const total = per.manual!==undefined ? per.manual : per.auto;
-  return {per, full: whole.sort(), half: half.sort(), used, total: total===null || total===undefined ? null : total};
+  const appUsed = whole.length + half.length*0.5;
+  const adj = leaveAdjustMap()[String(key)] || 0;       // 보정(앱 밖에서 쓴 연차 등)
+  const used = appUsed + adj;
+  const baseRaw = per.manual!==undefined ? per.manual : per.auto;
+  const base = baseRaw===null || baseRaw===undefined ? null : baseRaw;
+  // 앞 기간에 연차를 당겨써서 잔여가 마이너스였으면 그만큼 이번 기간 총 연차에서 뺌
+  let carry = 0;
+  if(base!==null && depth < 40){
+    const prev = leaveStatsFor(key-1, depth+1);
+    if(prev.total!==null && prev.total - prev.used < 0) carry = prev.used - prev.total;
+  }
+  const total = base===null ? null : base - carry;
+  return {per, full: whole.sort(), half: half.sort(), appUsed, adj, used, base, carry, total};
 }
 // 오늘이 들어 있는 기간의 key
 function currentLeaveKey(){
@@ -4183,6 +4209,12 @@ function renderLeaveCard(){
   const remainEl = document.getElementById('leaveRemainNum');
   if(st.total===null){ remainEl.textContent = '-'; remainEl.style.color = ''; }
   else { const r = st.total - st.used; remainEl.textContent = fmtLeaveNum(r); remainEl.style.color = r<0 ? '#FF5D5D' : ''; }
+  const calc = [];
+  if(st.base!==null && st.carry>0) calc.push('총 연차 = 기본 '+fmtLeaveNum(st.base)+'일 − 지난 기간에 당겨쓴 '+fmtLeaveNum(st.carry)+'일 = <b>'+fmtLeaveNum(st.total)+'일</b>');
+  if(st.adj) calc.push('사용 = 앱 기록 '+fmtLeaveNum(st.appUsed)+'일 '+(st.adj>0?'+ ':'− ')+'보정 '+fmtLeaveNum(Math.abs(st.adj))+'일');
+  if(st.total!==null && st.total - st.used < 0) calc.push('<span style="color:#FF5D5D;">당겨쓴 '+fmtLeaveNum(st.used - st.total)+'일은 다음 기간 총 연차에서 빠져요.</span>');
+  document.getElementById('leaveCalcNote').innerHTML = calc.join('<br>');
+  document.getElementById('leaveAdjReset').style.display = st.adj ? '' : 'none';
   const fmtDay = (iso)=>{ const d = parseIsoDate(iso); return (d.getMonth()+1)+'/'+d.getDate()+'('+weekdayNames[d.getDay()]+')'; };
   const parts = [];
   if(!state.leave.typeId) parts.push("연차로 셀 근무 유형을 먼저 골라 주세요. 없으면 '연차' 유형 만들기를 누르세요.");
@@ -4190,7 +4222,7 @@ function renderLeaveCard(){
   if(st.full.length) parts.push('<b>연차 '+st.full.length+'일</b> · '+st.full.map(fmtDay).join(', '));
   if(st.half.length) parts.push('<b>반차 '+st.half.length+'회</b> · '+st.half.map(iso=> fmtDay(iso)+' '+(state.leave.halves[iso]==='am'?'전반':'후반')).join(', '));
   if(state.leave.typeId && !st.full.length && !st.half.length) parts.push('이 기간에 사용한 연차가 없어요.');
-  parts.push('<span style="font-size:11px;">자동 계산은 근로기준법 기준(출근율 80% 이상)이에요. 회사 규정이 다르면 총 연차를 직접 입력하세요.</span>');
+  parts.push('<span style="font-size:11px;">자동 계산은 근로기준법 기준(출근율 80% 이상)이에요. 회사 규정이 다르면 기본 연차를 직접 입력하세요. 기본 연차는 당겨쓴 연차를 빼기 전 숫자예요.</span>');
   document.getElementById('leaveList').innerHTML = parts.join('<br>');
 }
 document.getElementById('leaveTypeSelect').onchange = (e)=>{
@@ -4220,6 +4252,24 @@ document.querySelectorAll('#leaveBasisSeg button').forEach(b=>{
     renderLeaveCard();
   };
 });
+document.getElementById('leaveRemainApply').onclick = ()=>{
+  const inp = document.getElementById('leaveRemainInput');
+  const v = Number(inp.value);
+  if(inp.value.trim()==='' || !isFinite(v)){ showToastMsg('맞출 잔여 연차를 입력해 주세요'); return; }
+  const st = leaveStatsFor(leaveViewYear);
+  if(st.total===null){ showToastMsg('먼저 기본 연차를 입력하거나 입사일을 넣어 주세요'); return; }
+  const desired = Math.round(v*2)/2;
+  const adj = Math.round((st.total - st.appUsed - desired)*2)/2; // 잔여 = 총 − (앱 기록 + 보정)
+  const map = leaveAdjustMap();
+  if(adj) map[String(leaveViewYear)] = adj; else delete map[String(leaveViewYear)];
+  inp.value = '';
+  renderLeaveCard();
+  showToastMsg('잔여 연차를 '+fmtLeaveNum(desired)+'일로 맞췄어요');
+};
+document.getElementById('leaveAdjReset').onclick = ()=>{
+  delete leaveAdjustMap()[String(leaveViewYear)];
+  renderLeaveCard();
+};
 document.getElementById('leavePrevYear').onclick = ()=>{ leaveViewYear--; renderLeaveCard(); };
 document.getElementById('leaveNextYear').onclick = ()=>{ leaveViewYear++; renderLeaveCard(); };
 document.getElementById('leaveTotalInput').addEventListener('input', (e)=>{
