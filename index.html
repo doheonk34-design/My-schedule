@@ -1840,7 +1840,8 @@ function renderNowLeave(){
   const el = document.getElementById('nowStatus');
   if(new URLSearchParams(location.search).get('view')){ row.style.display = 'none'; return; } // 남의 공유 화면엔 내 연차를 보이지 않음
   row.style.display = '';
-  if(!state.leave || !state.leave.typeId){
+  // 연차 유형을 안 골랐어도 입사일·총 연차·잔여 보정 중 하나라도 설정했으면 숫자를 보여줌
+  if(!leaveHasData(state.leave)){
     el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span><span style="white-space:normal;">설정 → 연차 관리에서 켜면 남은 연차가 여기 보여요</span></div>';
   } else {
     const st = leaveStatsFor(currentLeaveKey());
