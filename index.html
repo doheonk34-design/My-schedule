@@ -1076,12 +1076,19 @@ function resyncIdSequences(){
     seen.add(n.id);
   }));
 }
+// 연차 기록을 바꿀 때마다 시각을 남김 → 기기 간 동기화에서 더 최근에 수정한 쪽을 남김
+function touchLeave(){ state.leave.updatedAt = Date.now(); }
+function leaveHasData(lv){
+  return !!(lv && (lv.typeId || lv.hireDate || Object.keys(lv.halves||{}).length || Object.keys(lv.totals||{}).length
+    || Object.keys(lv.hireTotals||{}).length || Object.keys(lv.adjust||{}).length || Object.keys(lv.hireAdjust||{}).length));
+}
 function sanitizeLeave(lv){
   const out = {typeId:null, basis:'calendar', hireDate:null, totals:{}, hireTotals:{}, adjust:{}, hireAdjust:{}, halves:{}};
   if(!isPlainObj(lv)) return out;
   if(typeof lv.typeId==='string' && state.shiftTypes.some(s=>s.id===lv.typeId)) out.typeId = lv.typeId;
   if(lv.basis==='hire') out.basis = 'hire';
   if(lv.v===2) out.v = 2;
+  if(typeof lv.updatedAt==='number' && isFinite(lv.updatedAt)) out.updatedAt = lv.updatedAt;
   if(typeof lv.hireDate==='string' && parseIsoDate(lv.hireDate)) out.hireDate = lv.hireDate;
   ['totals','hireTotals'].forEach(k=>{
     if(isPlainObj(lv[k])) Object.keys(lv[k]).forEach(y=>{
@@ -2994,6 +3001,7 @@ document.querySelectorAll('#modalHalfSeg button').forEach(b=>{
     if(!isLeaveDay(iso)) return;
     if(b.dataset.half) state.leave.halves[iso] = b.dataset.half;
     else delete state.leave.halves[iso];
+    touchLeave();
     renderModalHalf();
     renderCalendar();
     renderNowLeave();
@@ -3026,7 +3034,7 @@ function renderModalTeamSelect(){
       const iso2 = isoDate(modalDate);
       if(!state.overrides[iso2]) state.overrides[iso2] = {};
       state.overrides[iso2][state.myTeamId] = e.target.value;
-      if(!isLeaveDay(iso2)) delete state.leave.halves[iso2];
+      if(!isLeaveDay(iso2) && state.leave.halves[iso2]){ delete state.leave.halves[iso2]; touchLeave(); }
       renderModalHalf();
       renderCalendar();
       renderNowCard();
@@ -3424,6 +3432,7 @@ function buildCalSubMemoPayload(){
   return { ...buildPublicSchedulePayload(), teams: [], myTeamId: null, overrides: {}, notes: state.notes };
 }
 
+let leaveKeptLocal = false; // 마지막 applyRemoteState에서 내 연차 기록이 더 최신이라 유지했는지 → 서버에 다시 올림
 function applyRemoteState(data){
   if(!data) return;
   state.shiftTypes = data.shiftTypes || state.shiftTypes;
@@ -3434,7 +3443,19 @@ function applyRemoteState(data){
   state.alarms = data.alarms || {};
   state.overrides = data.overrides || {};
   state.notes = data.notes || {};
-  if(data.leave !== undefined) state.leave = data.leave; // 예전 버전 기기가 올린 데이터에는 없음 → 내 기록 유지
+  // 연차: 더 최근에 수정한 쪽을 남김. 예전 버전 기기가 올린 데이터(연차 없음)나 빈 기록이 내 기록을 지우지 않게 함
+  leaveKeptLocal = false;
+  {
+    const inc = isPlainObj(data.leave) ? data.leave : null, loc = state.leave;
+    const incT = inc && typeof inc.updatedAt==='number' ? inc.updatedAt : 0;
+    const locT = loc && typeof loc.updatedAt==='number' ? loc.updatedAt : 0;
+    let takeRemote;
+    if(!inc) takeRemote = false;
+    else if(incT !== locT) takeRemote = incT > locT;
+    else takeRemote = leaveHasData(inc) || !leaveHasData(loc);
+    if(takeRemote) state.leave = inc;
+    else if(leaveHasData(loc) && stableStringify(sanitizeLeave(loc)) !== stableStringify(inc ? sanitizeLeave(inc) : null)) leaveKeptLocal = true;
+  }
   state.widgetSize = data.widgetSize || state.widgetSize;
   if(data.shareCode !== undefined) state.shareCode = data.shareCode;
   if(Array.isArray(data.shareCodeHistory)){
@@ -3537,6 +3558,7 @@ async function pullSyncOnce(showToast){
     }
     lastSyncedPayloadJSON = incomingJSON;
     applyRemoteState(data.payload);
+    if(leaveKeptLocal) pushStateToCloud(); // 서버에 없던(또는 오래된) 내 연차 기록을 다른 기기도 받게 올림
     if(showToast) showToastMsg('다른 기기의 변경사항을 가져왔어요');
   }catch(e){
     if(showToast) showToastMsg('동기화 연결에 문제가 있어요. 코드나 인터넷 연결을 확인해주세요');
@@ -4239,7 +4261,7 @@ function renderLeaveCard(){
 }
 document.getElementById('leaveTypeSelect').onchange = (e)=>{
   state.leave.typeId = e.target.value || null;
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
 };
 document.getElementById('leaveTypeCreateBtn').onclick = ()=>{
   let st = state.shiftTypes.find(s=> s.name==='연차');
@@ -4249,19 +4271,19 @@ document.getElementById('leaveTypeCreateBtn').onclick = ()=>{
     renderShiftTypeRows(); renderLegend();
   }
   state.leave.typeId = st.id;
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
   showToastMsg("'연차' 근무 유형을 연차로 셀게요");
 };
 document.getElementById('leaveHireInput').addEventListener('change', (e)=>{
   state.leave.hireDate = parseIsoDate(e.target.value) ? e.target.value : null;
   leaveViewYear = currentLeaveKey();
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
 });
 document.querySelectorAll('#leaveBasisSeg button').forEach(b=>{
   b.onclick = ()=>{
     state.leave.basis = b.dataset.basis;
     leaveViewYear = currentLeaveKey();
-    renderLeaveCard();
+    touchLeave(); renderLeaveCard();
   };
 });
 document.getElementById('leaveRemainApply').onclick = ()=>{
@@ -4275,12 +4297,12 @@ document.getElementById('leaveRemainApply').onclick = ()=>{
   const map = leaveAdjustMap();
   if(adj) map[String(leaveViewYear)] = adj; else delete map[String(leaveViewYear)];
   inp.value = '';
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
   showToastMsg('잔여 연차를 '+fmtLeaveNum(desired)+'일로 맞췄어요');
 };
 document.getElementById('leaveAdjReset').onclick = ()=>{
   delete leaveAdjustMap()[String(leaveViewYear)];
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
 };
 document.getElementById('leavePrevYear').onclick = ()=>{ leaveViewYear--; renderLeaveCard(); };
 document.getElementById('leaveNextYear').onclick = ()=>{ leaveViewYear++; renderLeaveCard(); };
@@ -4290,7 +4312,7 @@ document.getElementById('leaveTotalInput').addEventListener('input', (e)=>{
   const n = Number(v);
   if(v==='') delete map[String(leaveViewYear)];
   else if(isFinite(n) && n>=0 && n<=365) map[String(leaveViewYear)] = Math.round(n*2)/2;
-  renderLeaveCard();
+  touchLeave(); renderLeaveCard();
 });
 
 // ================= 아이폰 시계 알람 연동 (단축어) =================
