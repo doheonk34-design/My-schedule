@@ -368,6 +368,12 @@
   .now-status-row #nowStatus{
     font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:var(--text);
   }
+  .now-leave{display:flex; align-items:center; gap:10px; cursor:pointer; font-size:12px; color:var(--sub);}
+  .now-leave .nl-title{font-weight:700; color:var(--text); font-size:12px;}
+  .now-leave .nl-item{display:flex; align-items:baseline; gap:4px;}
+  .now-leave .nl-item b{font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text);}
+  .now-leave .nl-item b.neg{color:#FF5D5D;}
+  .now-leave .nl-period{margin-left:auto; font-size:10px;}
   .now-schedule-split{
     flex:1; min-width:0;
     display:grid; grid-template-columns:1fr auto 1fr; gap:14px;
@@ -1589,6 +1595,26 @@ function shiftForTeamOnDate(date, teamId){
 }
 
 // 외부(공유 받는 사람 / 캘린더 구독 워커)용: 예전 형식(이름)으로 바꿔서 내보냄 (워커·구버전 앱 호환)
+// 공유(링크·사진)용: 연차로 바꾼 날은 '휴'로 보여서 연차 사용 여부가 드러나지 않게 함
+function leaveShareOffType(){ return state.shiftTypes.find(s=> s.locked && s.role==='off' && isTypeUsable(s)) || null; }
+function isLeaveTypeId(id){ return !!(state.leave && state.leave.typeId && id===state.leave.typeId); }
+function shareShiftFor(date, teamId){
+  const s = shiftForTeamOnDate(date, teamId);
+  if(!isLeaveTypeId(s.typeId)) return s;
+  const off = leaveShareOffType();
+  return off ? {label: off.name, color: colorForShiftType(off), role:'off', typeId: off.id}
+             : {label:'휴', color:'#3A4150', role:'off', typeId:null};
+}
+function overridesForShare(){
+  const out = overridesAsLabels();
+  const off = leaveShareOffType();
+  Object.keys(state.overrides).forEach(iso=>{
+    Object.keys(state.overrides[iso]).forEach(tid=>{
+      if(isLeaveTypeId(state.overrides[iso][tid])) out[iso][tid] = off ? off.name : '휴';
+    });
+  });
+  return out;
+}
 function overridesAsLabels(){
   const out = {};
   Object.keys(state.overrides).forEach(iso=>{
@@ -1751,20 +1777,37 @@ function renderNowCard(){
   document.getElementById('nowDate').textContent = now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일 ('+weekdayNames[now.getDay()]+')';
   document.getElementById('nowTime').textContent = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
 
-  const statusEl = document.getElementById('nowStatus');
-  const win = getCurrentWorkWindow(now, state.myTeamId);
-  if(win){
-    const diffMs = Math.max(0, win.endDT - now);
-    const totalMin = Math.round(diffMs/60000);
-    const h = Math.floor(totalMin/60), m = totalMin%60;
-    statusEl.textContent = `퇴근까지 ${h}시간 ${m}분`;
-  } else {
-    statusEl.textContent = '';
-  }
+  renderNowLeave();
 
   renderNowScheduleSplit(now);
 }
 setInterval(renderNowCard, 15000); // 실시간 시계 갱신 (15초마다)
+
+// 메인 카드 아래 줄: 이번 기간 총 연차 · 사용 · 잔여 (누르면 설정의 연차 관리로)
+function renderNowLeave(){
+  const row = document.getElementById('nowStatusRow');
+  const el = document.getElementById('nowStatus');
+  if(new URLSearchParams(location.search).get('view')){ row.style.display = 'none'; return; } // 남의 공유 화면엔 내 연차를 보이지 않음
+  row.style.display = '';
+  if(!state.leave || !state.leave.typeId){
+    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span><span>설정 → 연차 관리에서 켜면 남은 연차가 여기 보여요</span></div>';
+  } else {
+    const st = leaveStatsFor(currentLeaveKey());
+    const total = st.total===null ? '-' : fmtLeaveNum(st.total);
+    const remain = st.total===null ? '-' : fmtLeaveNum(st.total - st.used);
+    const neg = st.total!==null && st.total - st.used < 0;
+    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span>'
+      + '<span class="nl-item">총<b>'+total+'</b></span>'
+      + '<span class="nl-item">사용<b>'+fmtLeaveNum(st.used)+'</b></span>'
+      + '<span class="nl-item">잔여<b class="'+(neg?'neg':'')+'">'+remain+'</b></span>'
+      + '<span class="nl-period">'+escapeHtml(st.per.label)+'</span></div>';
+  }
+  el.firstChild.onclick = ()=>{
+    openSettingsModal();
+    const card = [...document.querySelectorAll('.card-collapsible')].find(c=> c.querySelector('#leaveTypeSelect'));
+    if(card){ card.classList.remove('collapsed'); setTimeout(()=> card.scrollIntoView({block:'start'}), 50); }
+  };
+}
 
 function renderNowScheduleSplit(now){
   const MAX_ITEMS = 5;
@@ -2635,7 +2678,7 @@ function drawMonthToCanvas(year, month){
     const col = i % 7, row = Math.floor(i/7);
     const x = col*cellW, y = gridTop + row*cellH;
     const date = new Date(year, month, dayNum);
-    const mine = shiftForTeamOnDate(date, state.myTeamId);
+    const mine = shareShiftFor(date, state.myTeamId);
 
     ctx.fillStyle = mine.color + '22';
     roundRectPath(ctx, x+3, y+3, cellW-6, cellH-6, 8);
@@ -2667,26 +2710,20 @@ function drawMonthToCanvas(year, month){
 
     let dotX = x+10;
     state.teams.forEach(t=>{
-      const s = shiftForTeamOnDate(date, t.id);
+      const s = shareShiftFor(date, t.id);
       ctx.fillStyle = s.color;
       ctx.beginPath();
       ctx.arc(dotX+3, y+58, 3, 0, Math.PI*2);
       ctx.fill();
       dotX += 10;
     });
-
-    const notes = getNotesForDate(date);
-    if(notes.length){
-      ctx.font = '500 9px Inter, sans-serif';
-      ctx.fillStyle = '#8992A6';
-      ctx.fillText(truncateToWidth(ctx, '📝 '+notes[0].text, cellW-20), x+10, y+78);
-    }
+    // 메모는 사진 공유에 넣지 않음 (개인 일정 보호)
   }
 
   let legendX = 24;
   const legendY = gridTop + rows*cellH + 28;
   ctx.font = '600 11px Inter, sans-serif';
-  state.shiftTypes.forEach(st=>{
+  state.shiftTypes.filter(st=> isTypeUsable(st) && !isLeaveTypeId(st.id)).forEach(st=>{
     ctx.fillStyle = colorForShiftType(st);
     ctx.beginPath();
     ctx.arc(legendX, legendY-4, 4, 0, Math.PI*2);
@@ -2902,6 +2939,7 @@ document.querySelectorAll('#modalHalfSeg button').forEach(b=>{
     else delete state.leave.halves[iso];
     renderModalHalf();
     renderCalendar();
+    renderNowLeave();
     saveState();
     pushStateToCloud();
   };
@@ -3310,7 +3348,10 @@ function buildPublicSchedulePayload(){
   };
 }
 function buildShareOnlyPayload(){
-  return buildPublicSchedulePayload();
+  // 링크 공유: 메모·반차·연차 정보 없이 근무표만 (연차일은 '휴'로, 연차 근무유형 자체도 목록에서 뺌)
+  return { ...buildPublicSchedulePayload(),
+    shiftTypes: state.shiftTypes.filter(st=> !isLeaveTypeId(st.id)),
+    overrides: overridesForShare(), notes: {} };
 }
 
 // 내 캘린더 앱 구독용 - 근무표+메모는 포함하되, 알람 설정은 제외 (가볍게)
@@ -4081,6 +4122,7 @@ function currentLeaveKey(){
 let leaveViewYear = new Date().getFullYear();
 function fmtLeaveNum(n){ return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 function renderLeaveCard(){
+  setTimeout(renderNowLeave, 0);
   if(state.leave.typeId && !state.shiftTypes.some(t=>t.id===state.leave.typeId)) state.leave.typeId = null; // 지운 근무유형
   const sel = document.getElementById('leaveTypeSelect');
   const types = state.shiftTypes.filter(st=> st.role!=='day' && st.role!=='night' && st.role!=='standby');
