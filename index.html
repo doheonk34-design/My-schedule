@@ -368,12 +368,24 @@
   .now-status-row #nowStatus{
     font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:var(--text);
   }
-  .now-leave{display:flex; align-items:center; gap:10px; cursor:pointer; font-size:12px; color:var(--sub);}
-  .now-leave .nl-title{font-weight:700; color:var(--text); font-size:12px;}
-  .now-leave .nl-item{display:flex; align-items:baseline; gap:4px;}
+  .now-leave{display:flex; align-items:center; gap:10px; cursor:pointer; font-size:12px; color:var(--sub); white-space:nowrap; overflow:hidden;}
+  .now-leave .nl-title{font-weight:700; color:var(--text); font-size:12px; flex-shrink:0;}
+  .now-leave .nl-item{display:flex; align-items:baseline; gap:3px; flex-shrink:0;}
   .now-leave .nl-item b{font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text);}
   .now-leave .nl-item b.neg{color:#FF5D5D;}
-  .now-leave .nl-period{margin-left:auto; font-size:10px;}
+  .now-leave .nl-period{margin-left:auto; font-size:10px; min-width:0; overflow:hidden; text-overflow:ellipsis;}
+  /* 좁은 폰 화면: 한 줄에 들어가도록 글자·간격을 줄이고 기간 표시는 숨김 */
+  @media (max-width:420px){
+    .now-leave{gap:7px; font-size:11px;}
+    .now-leave .nl-title{font-size:11px;}
+    .now-leave .nl-item b{font-size:14px;}
+    .now-leave .nl-period{display:none;}
+  }
+  @media (max-width:360px){
+    .now-leave{gap:6px;}
+    .now-leave .nl-tt{display:none;}
+    .now-leave .nl-item b{font-size:13px;}
+  }
   .now-schedule-split{
     flex:1; min-width:0;
     display:grid; grid-template-columns:1fr auto 1fr; gap:14px;
@@ -1822,13 +1834,13 @@ function renderNowLeave(){
   if(new URLSearchParams(location.search).get('view')){ row.style.display = 'none'; return; } // 남의 공유 화면엔 내 연차를 보이지 않음
   row.style.display = '';
   if(!state.leave || !state.leave.typeId){
-    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span><span>설정 → 연차 관리에서 켜면 남은 연차가 여기 보여요</span></div>';
+    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span><span style="white-space:normal;">설정 → 연차 관리에서 켜면 남은 연차가 여기 보여요</span></div>';
   } else {
     const st = leaveStatsFor(currentLeaveKey());
     const total = st.total===null ? '-' : fmtLeaveNum(st.total);
     const remain = st.total===null ? '-' : fmtLeaveNum(st.total - st.used);
     const neg = st.total!==null && st.total - st.used < 0;
-    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️ 연차</span>'
+    el.innerHTML = '<div class="now-leave"><span class="nl-title">🏖️<span class="nl-tt"> 연차</span></span>'
       + '<span class="nl-item">총<b>'+total+'</b></span>'
       + '<span class="nl-item">사용<b>'+fmtLeaveNum(st.used)+'</b></span>'
       + '<span class="nl-item">잔여<b class="'+(neg?'neg':'')+'">'+remain+'</b></span>'
